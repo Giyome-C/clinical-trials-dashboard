@@ -8,6 +8,23 @@ function formatPhase(phases: string[]): string | null {
   return phases.map((p) => p.replace("PHASE", "Phase ").replace("EARLY_", "Early ")).join(" / ");
 }
 
+// CT.gov's lastUpdatePosted is a plain "YYYY-MM-DD" (sometimes "YYYY-MM")
+// string — parse leniently and fall back to the raw string if it's not a
+// full date.
+function formatUpdated(dateStr: string | null): string | null {
+  if (!dateStr) return null;
+  const parts = dateStr.split("-");
+  if (parts.length < 2) return dateStr;
+  const [year, month, day] = parts.map(Number);
+  const d = new Date(year, (month || 1) - 1, day || 1);
+  if (Number.isNaN(d.getTime())) return dateStr;
+  return d.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    ...(day ? { day: "numeric" } : {}),
+  });
+}
+
 function scopeTitle(scope: Scope): string {
   switch (scope.type) {
     case "all":
@@ -59,6 +76,7 @@ export default function TrialList({
         {trials.map((t) => {
           const active = t.nctId === selectedNctId;
           const phase = formatPhase(t.phases);
+          const updated = formatUpdated(t.lastUpdatePosted);
           return (
             <button
               key={t.nctId}
@@ -87,7 +105,10 @@ export default function TrialList({
                 {typeof t.enrollmentCount === "number" && <span>N={t.enrollmentCount}</span>}
                 {t.sponsorName && <span className="truncate">{t.sponsorName}</span>}
               </div>
-              <div className="mt-0.5 text-[10px] text-ink-muted tabular-nums">{t.nctId}</div>
+              <div className="mt-0.5 flex items-center justify-between text-[10px] text-ink-muted tabular-nums">
+                <span>{t.nctId}</span>
+                {updated && <span>Updated: {updated}</span>}
+              </div>
             </button>
           );
         })}

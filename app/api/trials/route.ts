@@ -40,8 +40,8 @@ export async function GET(req: NextRequest) {
     orderBy: [
       { changedInLastRefresh: "desc" },
       { isNewSinceLastRefresh: "desc" },
-      { lastChangedAt: "desc" },
       { lastUpdatePosted: "desc" },
+      { lastChangedAt: "desc" },
     ],
     select: {
       nctId: true,
