@@ -1,0 +1,28 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  @apply bg-surface-page text-ink-primary dark:bg-surface-dark-page dark:text-ink-primary-dark antialiased;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: #c3c2b7;
+  border-radius: 4px;
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: #383835;
+}

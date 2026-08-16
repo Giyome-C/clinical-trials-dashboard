@@ -1,0 +1,89 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("POSTGRES_PRISMA_URL")
+  directUrl = env("POSTGRES_URL_NON_POOLING")
+}
+
+// One row per indication being tracked (Atopic Dermatitis, Hidradenitis
+// Suppurativa, plus anything the user adds from the UI).
+model Indication {
+  id         String   @id @default(cuid())
+  name       String   @unique
+  searchTerm String // term sent to CT.gov as query.cond
+  isDefault  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+}
+
+// One row per tracked compound (the 22 seed compounds, extensible from the UI).
+model Compound {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  aliases   String[] @default([]) // e.g. ["AVTX-009"] for "Abdakibart"
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+// One row per NCT study we've ever seen, kept in sync with clinicaltrials.gov.
+model Trial {
+  nctId               String   @id
+  briefTitle           String
+  officialTitle        String?
+  overallStatus        String
+  studyType             String?
+  phases                String[] @default([])
+  enrollmentCount       Int?
+  enrollmentType        String?
+  startDate             String?
+  primaryCompletionDate String?
+  completionDate        String?
+  lastUpdatePosted      String?
+  sponsorName           String?
+  conditions            String[] @default([])
+  interventions         Json? // [{type,name,otherNames}]
+  locationsSummary      String? // e.g. "US, Germany, Japan (12 sites)"
+  briefSummary          String?
+  raw                   Json // full parsed snapshot, for the detail panel
+
+  matchedIndications String[] @default([]) // Indication.name values this trial matched
+  matchedCompounds   String[] @default([]) // Compound.name values this trial matched
+
+  firstSeenAt   DateTime @default(now())
+  lastCheckedAt DateTime @default(now())
+  lastChangedAt DateTime? // last time any tracked field actually changed
+  isNewSinceLastRefresh Boolean @default(false) // true only until the next refresh run completes
+  changedInLastRefresh  Boolean @default(false) // true only until the next refresh run completes
+
+  changes ChangeEvent[]
+
+  @@index([lastChangedAt])
+  @@index([overallStatus])
+}
+
+model ChangeEvent {
+  id         String   @id @default(cuid())
+  nctId      String
+  trial      Trial    @relation(fields: [nctId], references: [nctId], onDelete: Cascade)
+  field      String // e.g. "overallStatus", "primaryCompletionDate", "enrollmentCount"
+  oldValue   String?
+  newValue   String?
+  detectedAt DateTime @default(now())
+
+  @@index([nctId])
+  @@index([detectedAt])
+}
+
+// Bookkeeping for the refresh cron / manual refresh button.
+model RefreshLog {
+  id            String   @id @default(cuid())
+  startedAt     DateTime @default(now())
+  finishedAt    DateTime?
+  status        String   @default("running") // running | success | error
+  trialsScanned Int      @default(0)
+  changesFound  Int      @default(0)
+  newTrials     Int      @default(0)
+  errorMessage  String?
+}
