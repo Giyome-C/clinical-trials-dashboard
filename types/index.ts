@@ -13,6 +13,7 @@ export interface TrialSummary {
   lastChangedAt: string | null;
   isNewSinceLastRefresh: boolean;
   changedInLastRefresh: boolean;
+  changeSummary: string | null;
 }
 
 export interface ChangeEventDTO {

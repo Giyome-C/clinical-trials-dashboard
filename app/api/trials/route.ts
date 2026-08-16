@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { FIELD_LABELS, formatChangeValue } from "@/lib/statuses";
 
 export const dynamic = "force-dynamic";
 
@@ -62,5 +63,45 @@ export async function GET(req: NextRequest) {
     take: 500,
   });
 
-  return NextResponse.json({ trials });
+  // Build a one-line "what changed" summary for every trial flagged as
+  // changed in the most recent refresh, e.g. "Status: Recruiting →
+  // Completed · Enrollment (N=): 40 → 120".
+  const changedIds = trials.filter((t) => t.changedInLastRefresh).map((t) => t.nctId);
+  const summaryByTrial = new Map<string, string>();
+
+  if (changedIds.length > 0) {
+    const changeRows = await prisma.changeEvent.findMany({
+      where: { nctId: { in: changedIds } },
+      orderBy: { detectedAt: "desc" },
+    });
+
+    // Group each trial's rows, keeping only the most recent batch (rows
+    // sharing that trial's latest detectedAt) — that's "what changed in
+    // this refresh", as opposed to older change history.
+    const latestByTrial = new Map<string, typeof changeRows>();
+    for (const row of changeRows) {
+      const bucket = latestByTrial.get(row.nctId);
+      if (!bucket) {
+        latestByTrial.set(row.nctId, [row]);
+      } else if (bucket[0].detectedAt.getTime() === row.detectedAt.getTime()) {
+        bucket.push(row);
+      }
+    }
+
+    for (const [nctId, rows] of latestByTrial) {
+      const parts = rows.map(
+        (r) => `${FIELD_LABELS[r.field] ?? r.field}: ${formatChangeValue(r.field, r.oldValue)} → ${formatChangeValue(r.field, r.newValue)}`
+      );
+      const summary =
+        parts.length > 2 ? `${parts.slice(0, 2).join(" · ")} +${parts.length - 2} more` : parts.join(" · ");
+      summaryByTrial.set(nctId, summary);
+    }
+  }
+
+  const trialsWithSummary = trials.map((t) => ({
+    ...t,
+    changeSummary: summaryByTrial.get(t.nctId) ?? null,
+  }));
+
+  return NextResponse.json({ trials: trialsWithSummary });
 }

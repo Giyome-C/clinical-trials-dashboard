@@ -9,9 +9,9 @@ function formatPhase(phases: string[]): string | null {
 }
 
 // CT.gov's lastUpdatePosted is a plain "YYYY-MM-DD" (sometimes "YYYY-MM")
-// string — parse leniently and fall back to the raw string if it's not a
-// full date.
-function formatUpdated(dateStr: string | null): string | null {
+// string — no time of day, since CT.gov itself doesn't publish one. Parse
+// leniently and fall back to the raw string if it's not a full date.
+function formatPostedDate(dateStr: string | null): string | null {
   if (!dateStr) return null;
   const parts = dateStr.split("-");
   if (parts.length < 2) return dateStr;
@@ -22,6 +22,22 @@ function formatUpdated(dateStr: string | null): string | null {
     year: "numeric",
     month: "short",
     ...(day ? { day: "numeric" } : {}),
+  });
+}
+
+// lastChangedAt is a real timestamp this dashboard recorded the moment it
+// detected a diff, so — unlike CT.gov's date-only field — it can show a
+// precise date and time.
+function formatDetectedAt(iso: string | null): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
   });
 }
 
@@ -76,7 +92,11 @@ export default function TrialList({
         {trials.map((t) => {
           const active = t.nctId === selectedNctId;
           const phase = formatPhase(t.phases);
-          const updated = formatUpdated(t.lastUpdatePosted);
+          // Prefer the precise moment *this dashboard* detected a change;
+          // fall back to CT.gov's own (date-only) last-update-posted field
+          // for trials that haven't changed since their first snapshot.
+          const detectedAt = formatDetectedAt(t.lastChangedAt);
+          const postedDate = formatPostedDate(t.lastUpdatePosted);
           return (
             <button
               key={t.nctId}
@@ -105,9 +125,16 @@ export default function TrialList({
                 {typeof t.enrollmentCount === "number" && <span>N={t.enrollmentCount}</span>}
                 {t.sponsorName && <span className="truncate">{t.sponsorName}</span>}
               </div>
-              <div className="mt-0.5 flex items-center justify-between text-[10px] text-ink-muted tabular-nums">
+              {t.changeSummary && (
+                <div className="mt-1 text-[11px] text-brand dark:text-brand-dark">{t.changeSummary}</div>
+              )}
+              <div className="mt-0.5 flex items-center justify-between gap-2 text-[10px] text-ink-muted tabular-nums">
                 <span>{t.nctId}</span>
-                {updated && <span>Updated: {updated}</span>}
+                {detectedAt ? (
+                  <span>Updated: {detectedAt}</span>
+                ) : (
+                  postedDate && <span>Posted: {postedDate}</span>
+                )}
               </div>
             </button>
           );

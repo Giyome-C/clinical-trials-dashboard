@@ -94,3 +94,12 @@ export const FIELD_LABELS: Record<string, string> = {
   enrollmentCount: "Enrollment (N=)",
   phases: "Phase",
 };
+
+// Change events store raw values (e.g. overallStatus as the CT.gov code
+// "ACTIVE_NOT_RECRUITING"). This maps a stored old/new value to what should
+// actually be shown to a person.
+export function formatChangeValue(field: string, value: string | null): string {
+  if (value == null) return "—";
+  if (field === "overallStatus") return getStatusMeta(value).label;
+  return value;
+}

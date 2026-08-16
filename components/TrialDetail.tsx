@@ -2,7 +2,7 @@
 
 import type { TrialDetailDTO } from "@/types";
 import StatusBadge from "./StatusBadge";
-import { getStatusMeta, FIELD_LABELS } from "@/lib/statuses";
+import { getStatusMeta, FIELD_LABELS, formatChangeValue } from "@/lib/statuses";
 
 function fmtDate(d: string | null) {
   if (!d) return "—";
@@ -137,7 +137,8 @@ export default function TrialDetail({
                 <li key={c.id} className="text-[13px] border-l-2 border-brand/40 pl-3">
                   <div className="font-medium">{FIELD_LABELS[c.field] ?? c.field}</div>
                   <div className="text-ink-secondary dark:text-ink-secondary-dark">
-                    {c.oldValue ?? "—"} <span className="text-ink-muted">→</span> {c.newValue ?? "—"}
+                    {formatChangeValue(c.field, c.oldValue)} <span className="text-ink-muted">→</span>{" "}
+                    {formatChangeValue(c.field, c.newValue)}
                   </div>
                   <div className="text-[10px] text-ink-muted mt-0.5">
                     {new Date(c.detectedAt).toLocaleString()}
