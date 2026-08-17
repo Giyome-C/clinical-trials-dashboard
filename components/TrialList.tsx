@@ -45,10 +45,12 @@ function scopeTitle(scope: Scope): string {
   switch (scope.type) {
     case "all":
       return "All tracked trials";
-    case "new":
-      return "New since last refresh";
     case "changed":
-      return "Changed since last refresh";
+      return "Updates since last refresh";
+    case "today":
+      return "New Today";
+    case "week":
+      return "New this Week";
     case "indication":
       return scope.value;
     case "compound":

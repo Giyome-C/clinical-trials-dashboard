@@ -74,7 +74,8 @@ export interface RefreshLogDTO {
 
 export type Scope =
   | { type: "all" }
-  | { type: "new" }
   | { type: "changed" }
+  | { type: "today" }
+  | { type: "week" }
   | { type: "indication"; value: string }
   | { type: "compound"; value: string };

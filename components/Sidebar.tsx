@@ -127,11 +127,12 @@ export default function Sidebar({
       <div className="flex-1 overflow-y-auto px-2.5 py-3 space-y-5">
         <div>
           <div className="px-1 mb-1 flex items-center justify-between">
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-ink-muted">Views</span>
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-ink-muted">Menu</span>
           </div>
           <NavRow label="All tracked trials" active={isActive({ type: "all" })} onClick={() => onScopeChange({ type: "all" })} />
-          <NavRow label="New this refresh" active={isActive({ type: "new" })} onClick={() => onScopeChange({ type: "new" })} />
-          <NavRow label="Changed this refresh" active={isActive({ type: "changed" })} onClick={() => onScopeChange({ type: "changed" })} />
+          <NavRow label="Updates since last refresh" active={isActive({ type: "changed" })} onClick={() => onScopeChange({ type: "changed" })} />
+          <NavRow label="New Today" active={isActive({ type: "today" })} onClick={() => onScopeChange({ type: "today" })} />
+          <NavRow label="New this Week" active={isActive({ type: "week" })} onClick={() => onScopeChange({ type: "week" })} />
         </div>
 
         <div>

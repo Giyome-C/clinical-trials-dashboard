@@ -4,37 +4,52 @@ import { FIELD_LABELS, formatChangeValue } from "@/lib/statuses";
 
 export const dynamic = "force-dynamic";
 
-// GET /api/trials?scope=indication|compound|new|changed|all&value=<name>&q=<search>
+// GET /api/trials?scope=indication|compound|changed|today|week|all&value=<name>&q=<search>&since=<ISO>
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const scope = searchParams.get("scope") ?? "all";
   const value = searchParams.get("value");
   const q = searchParams.get("q")?.trim();
+  const since = searchParams.get("since");
 
   // Typed as `any` deliberately: Prisma's generated `Prisma.TrialWhereInput`
   // type isn't available until `prisma generate` has run against a real
   // database connection (e.g. on Vercel), so this avoids a hard dependency
   // on that generated type while still building a valid Prisma where clause.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const where: any = {};
+  const andGroups: any[] = [];
 
   if (scope === "indication" && value) {
-    where.matchedIndications = { has: value };
+    andGroups.push({ matchedIndications: { has: value } });
   } else if (scope === "compound" && value) {
-    where.matchedCompounds = { has: value };
-  } else if (scope === "new") {
-    where.isNewSinceLastRefresh = true;
+    andGroups.push({ matchedCompounds: { has: value } });
   } else if (scope === "changed") {
-    where.changedInLastRefresh = true;
+    andGroups.push({ changedInLastRefresh: true });
+  } else if ((scope === "today" || scope === "week") && since) {
+    // Persistent views: a trial belongs here for the whole day/week window
+    // regardless of how many refreshes have run since, so this checks
+    // against the stored timestamps directly rather than the ephemeral
+    // "this refresh only" flags.
+    const sinceDate = new Date(since);
+    if (!Number.isNaN(sinceDate.getTime())) {
+      andGroups.push({
+        OR: [{ firstSeenAt: { gte: sinceDate } }, { lastChangedAt: { gte: sinceDate } }],
+      });
+    }
   }
 
   if (q) {
-    where.OR = [
-      { briefTitle: { contains: q, mode: "insensitive" } },
-      { nctId: { contains: q, mode: "insensitive" } },
-      { sponsorName: { contains: q, mode: "insensitive" } },
-    ];
+    andGroups.push({
+      OR: [
+        { briefTitle: { contains: q, mode: "insensitive" } },
+        { nctId: { contains: q, mode: "insensitive" } },
+        { sponsorName: { contains: q, mode: "insensitive" } },
+      ],
+    });
   }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const where: any = andGroups.length > 0 ? { AND: andGroups } : {};
 
   const trials = await prisma.trial.findMany({
     where,

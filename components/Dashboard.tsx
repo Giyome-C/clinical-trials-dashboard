@@ -19,6 +19,21 @@ async function jsonFetch<T>(url: string, init?: RequestInit): Promise<T> {
   return res.json();
 }
 
+// Midnight, local time, today — the start of the "New Today" window.
+function startOfToday(): Date {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+// Midnight, local time, 6 days ago — a rolling 7-calendar-day window
+// ("New this Week") that always includes today plus the preceding 6 days.
+function startOfRollingWeek(): Date {
+  const d = startOfToday();
+  d.setDate(d.getDate() - 6);
+  return d;
+}
+
 export default function Dashboard() {
   const [indications, setIndications] = useState<IndicationDTO[]>([]);
   const [compounds, setCompounds] = useState<CompoundDTO[]>([]);
@@ -55,11 +70,13 @@ export default function Dashboard() {
     setTrialsLoading(true);
     try {
       const params = new URLSearchParams();
+      params.set("scope", s.type);
       if (s.type === "indication" || s.type === "compound") {
-        params.set("scope", s.type);
         params.set("value", s.value);
-      } else {
-        params.set("scope", s.type);
+      } else if (s.type === "today") {
+        params.set("since", startOfToday().toISOString());
+      } else if (s.type === "week") {
+        params.set("since", startOfRollingWeek().toISOString());
       }
       if (q) params.set("q", q);
       const data = await jsonFetch<{ trials: TrialSummary[] }>(`/api/trials?${params.toString()}`);
