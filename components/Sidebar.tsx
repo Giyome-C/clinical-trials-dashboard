@@ -1,7 +1,6 @@
 "use client";
 
-import { useState } from "react";
-import type { CompanyRefreshLogDTO, CompanySummary, CompoundDTO, IndicationDTO, RefreshLogDTO, Scope } from "@/types";
+import type { CompanyRefreshLogDTO, CompanySummary, RefreshLogDTO, Scope } from "@/types";
 
 function timeAgo(iso: string | null | undefined): string {
   if (!iso) return "never";
@@ -67,15 +66,9 @@ function NavRow({
 }
 
 export default function Sidebar({
-  indications,
-  compounds,
   companies,
   scope,
   onScopeChange,
-  onAddIndication,
-  onRemoveIndication,
-  onAddCompound,
-  onRemoveCompound,
   onRefresh,
   refreshing,
   lastRefresh,
@@ -86,15 +79,9 @@ export default function Sidebar({
   lastCompanyRefresh,
   totalUpdates,
 }: {
-  indications: IndicationDTO[];
-  compounds: CompoundDTO[];
   companies: CompanySummary[];
   scope: Scope;
   onScopeChange: (s: Scope) => void;
-  onAddIndication: (name: string) => void;
-  onRemoveIndication: (name: string) => void;
-  onAddCompound: (name: string, aliases: string[]) => void;
-  onRemoveCompound: (name: string) => void;
   onRefresh: () => void;
   refreshing: boolean;
   lastRefresh: RefreshLogDTO | null;
@@ -105,16 +92,6 @@ export default function Sidebar({
   lastCompanyRefresh: CompanyRefreshLogDTO | null;
   totalUpdates: number;
 }) {
-  const [addingIndication, setAddingIndication] = useState(false);
-  const [newIndication, setNewIndication] = useState("");
-  const [addingCompound, setAddingCompound] = useState(false);
-  const [newCompound, setNewCompound] = useState("");
-  const [compoundQuery, setCompoundQuery] = useState("");
-
-  const filteredCompounds = compounds.filter((c) =>
-    (c.name + " " + c.aliases.join(" ")).toLowerCase().includes(compoundQuery.toLowerCase())
-  );
-
   const isActive = (s: Scope) => JSON.stringify(s) === JSON.stringify(scope);
 
   return (
@@ -199,113 +176,6 @@ export default function Sidebar({
             active={isActive({ domain: "trial", type: "week" })}
             onClick={() => onScopeChange({ domain: "trial", type: "week" })}
           />
-        </div>
-
-        <div>
-          <div className="px-1 mb-1 flex items-center justify-between">
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-ink-muted">Indications</span>
-            <button
-              className="text-[11px] text-brand dark:text-brand-dark hover:underline"
-              onClick={() => setAddingIndication((v) => !v)}
-            >
-              + Add
-            </button>
-          </div>
-          {addingIndication && (
-            <form
-              className="px-1 mb-1.5 flex gap-1"
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (newIndication.trim()) {
-                  onAddIndication(newIndication.trim());
-                  setNewIndication("");
-                  setAddingIndication(false);
-                }
-              }}
-            >
-              <input
-                autoFocus
-                value={newIndication}
-                onChange={(e) => setNewIndication(e.target.value)}
-                placeholder="e.g. Alopecia Areata"
-                className="flex-1 min-w-0 rounded border border-hairline dark:border-hairline-dark bg-transparent px-2 py-1 text-xs"
-              />
-              <button type="submit" className="text-xs px-2 rounded bg-brand text-white">
-                Add
-              </button>
-            </form>
-          )}
-          {indications.map((ind) => (
-            <NavRow
-              key={ind.id}
-              label={ind.name}
-              count={ind.count}
-              newCount={ind.newCount}
-              active={isActive({ domain: "trial", type: "indication", value: ind.name })}
-              onClick={() => onScopeChange({ domain: "trial", type: "indication", value: ind.name })}
-              onRemove={ind.isDefault ? undefined : () => onRemoveIndication(ind.name)}
-            />
-          ))}
-        </div>
-
-        <div>
-          <div className="px-1 mb-1 flex items-center justify-between">
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-ink-muted">Compound-driven search</span>
-            <button
-              className="text-[11px] text-brand dark:text-brand-dark hover:underline"
-              onClick={() => setAddingCompound((v) => !v)}
-            >
-              + Add
-            </button>
-          </div>
-          {addingCompound && (
-            <form
-              className="px-1 mb-1.5 flex gap-1"
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (newCompound.trim()) {
-                  onAddCompound(newCompound.trim(), []);
-                  setNewCompound("");
-                  setAddingCompound(false);
-                }
-              }}
-            >
-              <input
-                autoFocus
-                value={newCompound}
-                onChange={(e) => setNewCompound(e.target.value)}
-                placeholder="Compound name / code"
-                className="flex-1 min-w-0 rounded border border-hairline dark:border-hairline-dark bg-transparent px-2 py-1 text-xs"
-              />
-              <button type="submit" className="text-xs px-2 rounded bg-brand text-white">
-                Add
-              </button>
-            </form>
-          )}
-          <div className="px-1 mb-1.5">
-            <input
-              value={compoundQuery}
-              onChange={(e) => setCompoundQuery(e.target.value)}
-              placeholder="Filter compounds…"
-              className="w-full rounded border border-hairline dark:border-hairline-dark bg-transparent px-2 py-1 text-xs"
-            />
-          </div>
-          <div className="max-h-64 overflow-y-auto">
-            {filteredCompounds.map((c) => (
-              <NavRow
-                key={c.id}
-                label={c.name}
-                count={c.count}
-                newCount={c.newCount}
-                active={isActive({ domain: "trial", type: "compound", value: c.name })}
-                onClick={() => onScopeChange({ domain: "trial", type: "compound", value: c.name })}
-                onRemove={c.isDefault ? undefined : () => onRemoveCompound(c.name)}
-              />
-            ))}
-            {filteredCompounds.length === 0 && (
-              <p className="px-2 py-1 text-[11px] text-ink-muted">No compounds match “{compoundQuery}”.</p>
-            )}
-          </div>
         </div>
       </div>
     </aside>

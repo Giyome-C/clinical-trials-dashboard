@@ -83,6 +83,15 @@ export default function Dashboard() {
   const [search, setSearch] = useState("");
   const [trials, setTrials] = useState<TrialSummary[]>([]);
   const [trialsLoading, setTrialsLoading] = useState(true);
+  const [selectedIndicationNames, setSelectedIndicationNames] = useState<string[]>([]);
+  const [selectedCompoundNames, setSelectedCompoundNames] = useState<string[]>([]);
+  const indicationsInitialized = useRef(false);
+  const compoundsInitialized = useRef(false);
+  // Guards the trial-reload effect until the first /api/meta response has
+  // populated the indication/compound selections — without this, the effect
+  // would fire once with empty selections (before loadMeta resolves), which
+  // the trials API reads as "exclude everything tagged in that dimension".
+  const [trialFiltersReady, setTrialFiltersReady] = useState(false);
 
   const [selectedNctId, setSelectedNctId] = useState<string | null>(null);
   const [selectedTrial, setSelectedTrial] = useState<TrialDetailDTO | null>(null);
@@ -119,28 +128,40 @@ export default function Dashboard() {
     setCompounds(data.compounds);
     setLastRefresh(data.lastRefresh);
     setTotalTrials(data.totalTrials);
+    // Default to "everything selected" the first time each roster loads, so
+    // the trial views show everything out of the box; later reloads (after
+    // add/remove) must not stomp on the user's own filter.
+    if (!indicationsInitialized.current) {
+      indicationsInitialized.current = true;
+      setSelectedIndicationNames(data.indications.map((i) => i.name));
+    }
+    if (!compoundsInitialized.current) {
+      compoundsInitialized.current = true;
+      setSelectedCompoundNames(data.compounds.map((c) => c.name));
+    }
+    setTrialFiltersReady(true);
     return data;
   }, []);
 
-  const loadTrials = useCallback(async (s: TrialScope, q: string) => {
-    setTrialsLoading(true);
-    try {
-      const params = new URLSearchParams();
-      params.set("scope", s.type);
-      if (s.type === "indication" || s.type === "compound") {
-        params.set("value", s.value);
-      } else if (s.type === "today") {
-        params.set("since", startOfToday().toISOString());
-      } else if (s.type === "week") {
-        params.set("since", startOfRollingWeek().toISOString());
+  const loadTrials = useCallback(
+    async (s: TrialScope, indicationNames: string[], compoundNames: string[], q: string) => {
+      setTrialsLoading(true);
+      try {
+        const params = new URLSearchParams();
+        params.set("scope", s.type);
+        params.set("indications", indicationNames.join(","));
+        params.set("compounds", compoundNames.join(","));
+        if (s.type === "today") params.set("since", startOfToday().toISOString());
+        else if (s.type === "week") params.set("since", startOfRollingWeek().toISOString());
+        if (q) params.set("q", q);
+        const data = await jsonFetch<{ trials: TrialSummary[] }>(`/api/trials?${params.toString()}`);
+        setTrials(data.trials);
+      } finally {
+        setTrialsLoading(false);
       }
-      if (q) params.set("q", q);
-      const data = await jsonFetch<{ trials: TrialSummary[] }>(`/api/trials?${params.toString()}`);
-      setTrials(data.trials);
-    } finally {
-      setTrialsLoading(false);
-    }
-  }, []);
+    },
+    []
+  );
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -150,10 +171,10 @@ export default function Dashboard() {
       // surfaced via lastRefresh.status after reload below
     } finally {
       await loadMeta();
-      if (scope.domain === "trial") await loadTrials(scope, search);
+      if (scope.domain === "trial") await loadTrials(scope, selectedIndicationNames, selectedCompoundNames, search);
       setRefreshing(false);
     }
-  }, [loadMeta, loadTrials, scope, search]);
+  }, [loadMeta, loadTrials, scope, selectedIndicationNames, selectedCompoundNames, search]);
 
   // --- Tracked Companies data loading -------------------------------------
 
@@ -232,11 +253,13 @@ export default function Dashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Reload the trial list whenever its scope or search changes.
+  // Reload the trial list whenever its scope, search, indication filter, or
+  // compound filter changes. Gated on trialFiltersReady so this doesn't fire
+  // with empty (not-yet-loaded) selections — see the flag's declaration.
   useEffect(() => {
-    if (scope.domain !== "trial") return;
-    loadTrials(scope, search);
-  }, [scope, search, loadTrials]);
+    if (scope.domain !== "trial" || !trialFiltersReady) return;
+    loadTrials(scope, selectedIndicationNames, selectedCompoundNames, search);
+  }, [scope, search, selectedIndicationNames, selectedCompoundNames, trialFiltersReady, loadTrials]);
 
   // Reload the company list whenever its scope, search, company filter, or
   // update-type filter changes. An explicit "zero companies selected" (or
@@ -299,15 +322,14 @@ export default function Dashboard() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name }),
     });
+    setSelectedIndicationNames((prev) => (prev.includes(name) ? prev : [...prev, name]));
     await loadMeta();
     await handleRefresh();
   };
 
   const handleRemoveIndication = async (name: string) => {
     await jsonFetch(`/api/indications?name=${encodeURIComponent(name)}`, { method: "DELETE" });
-    if (scope.domain === "trial" && scope.type === "indication" && scope.value === name) {
-      setScope({ domain: "trial", type: "all" });
-    }
+    setSelectedIndicationNames((prev) => prev.filter((n) => n !== name));
     await loadMeta();
   };
 
@@ -317,17 +339,30 @@ export default function Dashboard() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name, aliases }),
     });
+    setSelectedCompoundNames((prev) => (prev.includes(name) ? prev : [...prev, name]));
     await loadMeta();
     await handleRefresh();
   };
 
   const handleRemoveCompound = async (name: string) => {
     await jsonFetch(`/api/compounds?name=${encodeURIComponent(name)}`, { method: "DELETE" });
-    if (scope.domain === "trial" && scope.type === "compound" && scope.value === name) {
-      setScope({ domain: "trial", type: "all" });
-    }
+    setSelectedCompoundNames((prev) => prev.filter((n) => n !== name));
     await loadMeta();
   };
+
+  // --- Tracked Trials filter handlers -------------------------------------
+
+  const handleToggleIndication = (name: string) => {
+    setSelectedIndicationNames((prev) => (prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]));
+  };
+  const handleSelectAllIndications = () => setSelectedIndicationNames(indications.map((i) => i.name));
+  const handleClearIndications = () => setSelectedIndicationNames([]);
+
+  const handleToggleCompound = (name: string) => {
+    setSelectedCompoundNames((prev) => (prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]));
+  };
+  const handleSelectAllCompounds = () => setSelectedCompoundNames(compounds.map((c) => c.name));
+  const handleClearCompounds = () => setSelectedCompoundNames([]);
 
   // --- Tracked Companies handlers -----------------------------------------
 
@@ -364,15 +399,9 @@ export default function Dashboard() {
   return (
     <div className="flex h-screen w-screen overflow-hidden">
       <Sidebar
-        indications={indications}
-        compounds={compounds}
         companies={companies}
         scope={scope}
         onScopeChange={handleScopeChange}
-        onAddIndication={handleAddIndication}
-        onRemoveIndication={handleRemoveIndication}
-        onAddCompound={handleAddCompound}
-        onRemoveCompound={handleRemoveCompound}
         onRefresh={handleRefresh}
         refreshing={refreshing}
         lastRefresh={lastRefresh}
@@ -393,6 +422,20 @@ export default function Dashboard() {
             onSelect={setSelectedNctId}
             search={rawSearch}
             onSearchChange={setRawSearch}
+            indications={indications}
+            selectedIndicationNames={selectedIndicationNames}
+            onToggleIndication={handleToggleIndication}
+            onSelectAllIndications={handleSelectAllIndications}
+            onClearIndications={handleClearIndications}
+            onAddIndication={handleAddIndication}
+            onRemoveIndication={handleRemoveIndication}
+            compounds={compounds}
+            selectedCompoundNames={selectedCompoundNames}
+            onToggleCompound={handleToggleCompound}
+            onSelectAllCompounds={handleSelectAllCompounds}
+            onClearCompounds={handleClearCompounds}
+            onAddCompound={handleAddCompound}
+            onRemoveCompound={handleRemoveCompound}
           />
           <TrialDetail trial={selectedTrial} loading={detailLoading} />
         </>

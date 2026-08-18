@@ -77,13 +77,15 @@ export interface RefreshLogDTO {
 // companies (SEC/FDA/press-release updates). Each domain has its own set
 // of views; Dashboard renders TrialList/TrialDetail vs
 // CompanyList/CompanyDetail depending on which is active.
+// "indication"/"compound" used to be separate single-select nav scopes;
+// they're now multi-select filters (see the trial filter modal) applied on
+// top of whichever of these four views is active, rather than views of
+// their own.
 export type TrialScope =
   | { domain: "trial"; type: "all" }
   | { domain: "trial"; type: "changed" }
   | { domain: "trial"; type: "today" }
-  | { domain: "trial"; type: "week" }
-  | { domain: "trial"; type: "indication"; value: string }
-  | { domain: "trial"; type: "compound"; value: string };
+  | { domain: "trial"; type: "week" };
 
 export type CompanyScope =
   | { domain: "company"; type: "all" }

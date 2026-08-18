@@ -1,7 +1,9 @@
 "use client";
 
-import type { TrialScope, TrialSummary } from "@/types";
+import { useState } from "react";
+import type { CompoundDTO, IndicationDTO, TrialScope, TrialSummary } from "@/types";
 import StatusBadge from "./StatusBadge";
+import TrialFilterModal from "./TrialFilterModal";
 
 function formatPhase(phases: string[]): string | null {
   if (!phases.length) return null;
@@ -39,10 +41,6 @@ function scopeTitle(scope: TrialScope): string {
       return "New Today";
     case "week":
       return "New this Week";
-    case "indication":
-      return scope.value;
-    case "compound":
-      return scope.value;
   }
 }
 
@@ -54,6 +52,20 @@ export default function TrialList({
   onSelect,
   search,
   onSearchChange,
+  indications,
+  selectedIndicationNames,
+  onToggleIndication,
+  onSelectAllIndications,
+  onClearIndications,
+  onAddIndication,
+  onRemoveIndication,
+  compounds,
+  selectedCompoundNames,
+  onToggleCompound,
+  onSelectAllCompounds,
+  onClearCompounds,
+  onAddCompound,
+  onRemoveCompound,
 }: {
   scope: TrialScope;
   trials: TrialSummary[];
@@ -62,11 +74,39 @@ export default function TrialList({
   onSelect: (nctId: string) => void;
   search: string;
   onSearchChange: (v: string) => void;
+  indications: IndicationDTO[];
+  selectedIndicationNames: string[];
+  onToggleIndication: (name: string) => void;
+  onSelectAllIndications: () => void;
+  onClearIndications: () => void;
+  onAddIndication: (name: string) => void;
+  onRemoveIndication: (name: string) => void;
+  compounds: CompoundDTO[];
+  selectedCompoundNames: string[];
+  onToggleCompound: (name: string) => void;
+  onSelectAllCompounds: () => void;
+  onClearCompounds: () => void;
+  onAddCompound: (name: string, aliases: string[]) => void;
+  onRemoveCompound: (name: string) => void;
 }) {
+  const [filterOpen, setFilterOpen] = useState(false);
+  const filtersActive =
+    (indications.length > 0 && selectedIndicationNames.length < indications.length) ||
+    (compounds.length > 0 && selectedCompoundNames.length < compounds.length);
+
   return (
     <section className="flex h-full w-[420px] shrink-0 flex-col border-r border-hairline dark:border-hairline-dark bg-surface-page dark:bg-surface-dark-page">
       <div className="px-4 py-3 border-b border-hairline dark:border-hairline-dark">
-        <h2 className="text-sm font-semibold truncate">{scopeTitle(scope)}</h2>
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold truncate">{scopeTitle(scope)}</h2>
+          <button
+            onClick={() => setFilterOpen(true)}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-hairline dark:border-hairline-dark px-2 py-1 text-[11px] font-medium text-ink-secondary hover:bg-ink-muted/10 dark:text-ink-secondary-dark"
+          >
+            Filter
+            {filtersActive && <span className="h-1.5 w-1.5 rounded-full bg-brand dark:bg-brand-dark" />}
+          </button>
+        </div>
         <input
           value={search}
           onChange={(e) => onSearchChange(e.target.value)}
@@ -74,6 +114,25 @@ export default function TrialList({
           className="mt-2 w-full rounded-md border border-hairline dark:border-hairline-dark bg-surface dark:bg-surface-dark px-2.5 py-1.5 text-xs"
         />
       </div>
+      {filterOpen && (
+        <TrialFilterModal
+          onClose={() => setFilterOpen(false)}
+          indications={indications}
+          selectedIndicationNames={selectedIndicationNames}
+          onToggleIndication={onToggleIndication}
+          onSelectAllIndications={onSelectAllIndications}
+          onClearIndications={onClearIndications}
+          onAddIndication={onAddIndication}
+          onRemoveIndication={onRemoveIndication}
+          compounds={compounds}
+          selectedCompoundNames={selectedCompoundNames}
+          onToggleCompound={onToggleCompound}
+          onSelectAllCompounds={onSelectAllCompounds}
+          onClearCompounds={onClearCompounds}
+          onAddCompound={onAddCompound}
+          onRemoveCompound={onRemoveCompound}
+        />
+      )}
       <div className="flex-1 overflow-y-auto">
         {loading && <p className="px-4 py-6 text-xs text-ink-muted">Loading…</p>}
         {!loading && trials.length === 0 && (

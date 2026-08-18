@@ -4,13 +4,14 @@ import { FIELD_LABELS, formatChangeValue } from "@/lib/statuses";
 
 export const dynamic = "force-dynamic";
 
-// GET /api/trials?scope=indication|compound|changed|today|week|all&value=<name>&q=<search>&since=<ISO>
+// GET /api/trials?scope=changed|today|week|all&indications=<names>&compounds=<names>&q=<search>&since=<ISO>
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const scope = searchParams.get("scope") ?? "all";
-  const value = searchParams.get("value");
   const q = searchParams.get("q")?.trim();
   const since = searchParams.get("since");
+  const indicationsParam = searchParams.get("indications");
+  const compoundsParam = searchParams.get("compounds");
 
   // Typed as `any` deliberately: Prisma's generated `Prisma.TrialWhereInput`
   // type isn't available until `prisma generate` has run against a real
@@ -19,11 +20,34 @@ export async function GET(req: NextRequest) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const andGroups: any[] = [];
 
-  if (scope === "indication" && value) {
-    andGroups.push({ matchedIndications: { has: value } });
-  } else if (scope === "compound" && value) {
-    andGroups.push({ matchedCompounds: { has: value } });
-  } else if (scope === "changed") {
+  // Indication/compound are independent multi-select filters (not mutually
+  // exclusive scopes) layered on top of the all/changed/today/week view. A
+  // trial with no tags in a given dimension is untouched by that dimension's
+  // filter (e.g. a compound-only trial always passes the indication filter)
+  // — only trials actually tagged in a dimension get checked against the
+  // selected names for it. That's what lets clearing/narrowing one filter
+  // (say, indications) hide only the trials found *via* that dimension,
+  // without also hiding trials that were found purely via the other one.
+  if (indicationsParam !== null) {
+    const names = indicationsParam
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    andGroups.push({
+      OR: [{ matchedIndications: { isEmpty: true } }, { matchedIndications: { hasSome: names } }],
+    });
+  }
+  if (compoundsParam !== null) {
+    const names = compoundsParam
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    andGroups.push({
+      OR: [{ matchedCompounds: { isEmpty: true } }, { matchedCompounds: { hasSome: names } }],
+    });
+  }
+
+  if (scope === "changed") {
     andGroups.push({ changedInLastRefresh: true });
   } else if ((scope === "today" || scope === "week") && since) {
     // Persistent views: a trial belongs here for the whole day/week window
