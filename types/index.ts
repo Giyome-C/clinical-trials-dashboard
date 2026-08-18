@@ -124,11 +124,6 @@ export interface StockQuoteDTO {
   fiftyTwoWeekHigh: number | null;
   fiftyTwoWeekLow: number | null;
   sparkline: number[];
-  marketCap: number | null;
-  nextEarningsDate: string | null;
-  netIncome: number | null;
-  profitMargin: number | null;
-  totalCash: number | null;
   asOf: string;
 }
 

@@ -29,6 +29,16 @@ async function openFdaSearch(path: string, searchExpr: string, limit = 100): Pro
   return data.results ?? [];
 }
 
+// Truncates at a word boundary instead of a hard character cut, so long
+// prose (like a label's "Indications and Usage" section) doesn't end
+// mid-word.
+function truncateAtWord(text: string, maxLen: number): string {
+  if (text.length <= maxLen) return text;
+  const cut = text.slice(0, maxLen);
+  const lastSpace = cut.lastIndexOf(" ");
+  return `${(lastSpace > 0 ? cut.slice(0, lastSpace) : cut).trim()}…`;
+}
+
 function parseFdaDate(yyyymmdd: string | undefined | null): string | null {
   if (!yyyymmdd || yyyymmdd.length !== 8) return null;
   const y = yyyymmdd.slice(0, 4);
@@ -112,7 +122,7 @@ export async function fetchDrugLabelUpdates(sponsorNames: string[]): Promise<Fda
       seen.set(setId, {
         externalId: setId,
         title: `FDA label update: ${brand || "unnamed product"}`,
-        summary: indications ? indications.slice(0, 240) : null,
+        summary: indications ? truncateAtWord(indications, 600) : null,
         sourceDate,
         url: `https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=${setId}`,
       });
