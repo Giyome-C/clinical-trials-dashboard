@@ -8,27 +8,15 @@ function formatPhase(phases: string[]): string | null {
   return phases.map((p) => p.replace("PHASE", "Phase ").replace("EARLY_", "Early ")).join(" / ");
 }
 
-// CT.gov's lastUpdatePosted is a plain "YYYY-MM-DD" (sometimes "YYYY-MM")
-// string — no time of day, since CT.gov itself doesn't publish one. Parse
-// leniently and fall back to the raw string if it's not a full date.
-function formatPostedDate(dateStr: string | null): string | null {
-  if (!dateStr) return null;
-  const parts = dateStr.split("-");
-  if (parts.length < 2) return dateStr;
-  const [year, month, day] = parts.map(Number);
-  const d = new Date(year, (month || 1) - 1, day || 1);
-  if (Number.isNaN(d.getTime())) return dateStr;
-  return d.toLocaleDateString(undefined, {
-    year: "numeric",
-    month: "short",
-    ...(day ? { day: "numeric" } : {}),
-  });
-}
-
-// lastChangedAt is a real timestamp this dashboard recorded the moment it
-// detected a diff, so — unlike CT.gov's date-only field — it can show a
-// precise date and time.
-function formatDetectedAt(iso: string | null): string | null {
+// Both firstSeenAt and lastChangedAt are real timestamps *this dashboard*
+// recorded (the moment it first tracked a trial, or the moment it detected
+// a diff in one of the fields it watches), so — unlike CT.gov's own
+// date-only "last update posted" field — they can show a precise date and
+// time. Deliberately NOT using CT.gov's field here: it can move for edits
+// (contacts, locations, documents) unrelated to what this dashboard tracks,
+// which made a row's displayed date disconnected from why it actually
+// showed up in a given view (e.g. "New Today" vs "New this Week").
+function formatTimestamp(iso: string | null): string | null {
   if (!iso) return null;
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return null;
@@ -94,11 +82,13 @@ export default function TrialList({
         {trials.map((t) => {
           const active = t.nctId === selectedNctId;
           const phase = formatPhase(t.phases);
-          // Prefer the precise moment *this dashboard* detected a change;
-          // fall back to CT.gov's own (date-only) last-update-posted field
-          // for trials that haven't changed since their first snapshot.
-          const detectedAt = formatDetectedAt(t.lastChangedAt);
-          const postedDate = formatPostedDate(t.lastUpdatePosted);
+          // Show the precise moment *this dashboard* detected a tracked-field
+          // change; if it hasn't changed since we started tracking it, fall
+          // back to when we first saw it. Both come from our own records, so
+          // this always matches the reason the trial appears in whichever
+          // view is selected (e.g. "New Today" / "New this Week").
+          const changedAt = formatTimestamp(t.lastChangedAt);
+          const firstSeenAt = formatTimestamp(t.firstSeenAt);
           return (
             <button
               key={t.nctId}
@@ -132,10 +122,10 @@ export default function TrialList({
               )}
               <div className="mt-0.5 flex items-center justify-between gap-2 text-[10px] text-ink-muted tabular-nums">
                 <span>{t.nctId}</span>
-                {detectedAt ? (
-                  <span>Updated: {detectedAt}</span>
+                {changedAt ? (
+                  <span>Updated: {changedAt}</span>
                 ) : (
-                  postedDate && <span>Posted: {postedDate}</span>
+                  firstSeenAt && <span>First seen: {firstSeenAt}</span>
                 )}
               </div>
             </button>
