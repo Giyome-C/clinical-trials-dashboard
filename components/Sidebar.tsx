@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { CompoundDTO, IndicationDTO, RefreshLogDTO, Scope } from "@/types";
+import type { CompanyRefreshLogDTO, CompanySummary, CompoundDTO, IndicationDTO, RefreshLogDTO, Scope } from "@/types";
 
 function timeAgo(iso: string | null | undefined): string {
   if (!iso) return "never";
@@ -69,6 +69,7 @@ function NavRow({
 export default function Sidebar({
   indications,
   compounds,
+  companies,
   scope,
   onScopeChange,
   onAddIndication,
@@ -79,9 +80,20 @@ export default function Sidebar({
   refreshing,
   lastRefresh,
   totalTrials,
+  selectedCompanyNames,
+  onToggleCompany,
+  onSelectAllCompanies,
+  onClearCompanies,
+  onAddCompany,
+  onRemoveCompany,
+  onRefreshCompanies,
+  refreshingCompanies,
+  lastCompanyRefresh,
+  totalUpdates,
 }: {
   indications: IndicationDTO[];
   compounds: CompoundDTO[];
+  companies: CompanySummary[];
   scope: Scope;
   onScopeChange: (s: Scope) => void;
   onAddIndication: (name: string) => void;
@@ -92,18 +104,32 @@ export default function Sidebar({
   refreshing: boolean;
   lastRefresh: RefreshLogDTO | null;
   totalTrials: number;
+  selectedCompanyNames: string[];
+  onToggleCompany: (name: string) => void;
+  onSelectAllCompanies: () => void;
+  onClearCompanies: () => void;
+  onAddCompany: (name: string, ticker: string | null) => void;
+  onRemoveCompany: (name: string) => void;
+  onRefreshCompanies: () => void;
+  refreshingCompanies: boolean;
+  lastCompanyRefresh: CompanyRefreshLogDTO | null;
+  totalUpdates: number;
 }) {
   const [addingIndication, setAddingIndication] = useState(false);
   const [newIndication, setNewIndication] = useState("");
   const [addingCompound, setAddingCompound] = useState(false);
   const [newCompound, setNewCompound] = useState("");
   const [compoundQuery, setCompoundQuery] = useState("");
+  const [addingCompany, setAddingCompany] = useState(false);
+  const [newCompanyName, setNewCompanyName] = useState("");
+  const [newCompanyTicker, setNewCompanyTicker] = useState("");
 
   const filteredCompounds = compounds.filter((c) =>
     (c.name + " " + c.aliases.join(" ")).toLowerCase().includes(compoundQuery.toLowerCase())
   );
 
   const isActive = (s: Scope) => JSON.stringify(s) === JSON.stringify(scope);
+  const allCompaniesSelected = companies.length > 0 && selectedCompanyNames.length === companies.length;
 
   return (
     <aside className="flex h-full w-72 shrink-0 flex-col border-r border-hairline dark:border-hairline-dark bg-surface dark:bg-surface-dark">
@@ -127,12 +153,143 @@ export default function Sidebar({
       <div className="flex-1 overflow-y-auto px-2.5 py-3 space-y-5">
         <div>
           <div className="px-1 mb-1 flex items-center justify-between">
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-ink-muted">Menu</span>
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-ink-muted">Tracked Companies</span>
+            <button
+              className="text-[11px] text-brand dark:text-brand-dark hover:underline"
+              onClick={() => setAddingCompany((v) => !v)}
+            >
+              + Add
+            </button>
           </div>
-          <NavRow label="All tracked trials" active={isActive({ type: "all" })} onClick={() => onScopeChange({ type: "all" })} />
-          <NavRow label="Updates since last refresh" active={isActive({ type: "changed" })} onClick={() => onScopeChange({ type: "changed" })} />
-          <NavRow label="New Today" active={isActive({ type: "today" })} onClick={() => onScopeChange({ type: "today" })} />
-          <NavRow label="New this Week" active={isActive({ type: "week" })} onClick={() => onScopeChange({ type: "week" })} />
+          {addingCompany && (
+            <form
+              className="px-1 mb-1.5 flex gap-1"
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (newCompanyName.trim()) {
+                  onAddCompany(newCompanyName.trim(), newCompanyTicker.trim() || null);
+                  setNewCompanyName("");
+                  setNewCompanyTicker("");
+                  setAddingCompany(false);
+                }
+              }}
+            >
+              <input
+                autoFocus
+                value={newCompanyName}
+                onChange={(e) => setNewCompanyName(e.target.value)}
+                placeholder="Company name"
+                className="flex-1 min-w-0 rounded border border-hairline dark:border-hairline-dark bg-transparent px-2 py-1 text-xs"
+              />
+              <input
+                value={newCompanyTicker}
+                onChange={(e) => setNewCompanyTicker(e.target.value)}
+                placeholder="Ticker"
+                className="w-16 min-w-0 rounded border border-hairline dark:border-hairline-dark bg-transparent px-2 py-1 text-xs"
+              />
+              <button type="submit" className="text-xs px-2 rounded bg-brand text-white">
+                Add
+              </button>
+            </form>
+          )}
+
+          <NavRow
+            label="All tracked companies"
+            count={totalUpdates}
+            active={isActive({ domain: "company", type: "all" })}
+            onClick={() => onScopeChange({ domain: "company", type: "all" })}
+          />
+          <NavRow
+            label="New Today"
+            active={isActive({ domain: "company", type: "today" })}
+            onClick={() => onScopeChange({ domain: "company", type: "today" })}
+          />
+          <NavRow
+            label="New this Week"
+            active={isActive({ domain: "company", type: "week" })}
+            onClick={() => onScopeChange({ domain: "company", type: "week" })}
+          />
+
+          <p className="mt-2 px-1 text-[10px] text-ink-muted">
+            {selectedCompanyNames.length} of {companies.length} selected · refreshed{" "}
+            {timeAgo(lastCompanyRefresh?.finishedAt ?? lastCompanyRefresh?.startedAt)}
+          </p>
+          <button
+            onClick={onRefreshCompanies}
+            disabled={refreshingCompanies}
+            className="mt-1.5 mb-1.5 w-full rounded-md border border-hairline dark:border-hairline-dark bg-transparent text-ink-secondary dark:text-ink-secondary-dark text-[11px] font-medium py-1 hover:bg-ink-muted/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {refreshingCompanies ? "Refreshing…" : "Refresh companies"}
+          </button>
+          {lastCompanyRefresh?.status === "error" && (
+            <p className="mb-1.5 px-1 text-[10px] text-status-critical">Last company refresh had errors — see server logs.</p>
+          )}
+
+          <div className="mt-1 flex items-center justify-between px-1">
+            <span className="text-[10px] text-ink-muted">Filter by company</span>
+            <button
+              className="text-[10px] text-brand dark:text-brand-dark hover:underline"
+              onClick={allCompaniesSelected ? onClearCompanies : onSelectAllCompanies}
+            >
+              {allCompaniesSelected ? "Clear all" : "Select all"}
+            </button>
+          </div>
+          <div className="max-h-56 overflow-y-auto mt-1">
+            {companies.map((c) => (
+              <label
+                key={c.id}
+                className="group flex items-center gap-2 rounded-md px-1.5 py-1 text-[12px] text-ink-secondary dark:text-ink-secondary-dark cursor-pointer hover:bg-ink-muted/10"
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedCompanyNames.includes(c.name)}
+                  onChange={() => onToggleCompany(c.name)}
+                  className="h-3.5 w-3.5 shrink-0 accent-brand"
+                />
+                <span className="flex-1 truncate">{c.name}</span>
+                <span className="text-[10px] text-ink-muted tabular-nums">{c.count}</span>
+                {!c.isDefault && (
+                  <button
+                    aria-label={`Remove ${c.name}`}
+                    className="opacity-0 group-hover:opacity-100 text-ink-muted hover:text-status-critical text-xs px-1"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      onRemoveCompany(c.name);
+                    }}
+                  >
+                    ✕
+                  </button>
+                )}
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <div className="px-1 mb-1 flex items-center justify-between">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-ink-muted">Tracked Trials</span>
+          </div>
+          <NavRow
+            label="All tracked trials"
+            active={isActive({ domain: "trial", type: "all" })}
+            onClick={() => onScopeChange({ domain: "trial", type: "all" })}
+          />
+          <NavRow
+            label="Updates since last refresh"
+            active={isActive({ domain: "trial", type: "changed" })}
+            onClick={() => onScopeChange({ domain: "trial", type: "changed" })}
+          />
+          <NavRow
+            label="New Today"
+            active={isActive({ domain: "trial", type: "today" })}
+            onClick={() => onScopeChange({ domain: "trial", type: "today" })}
+          />
+          <NavRow
+            label="New this Week"
+            active={isActive({ domain: "trial", type: "week" })}
+            onClick={() => onScopeChange({ domain: "trial", type: "week" })}
+          />
         </div>
 
         <div>
@@ -175,8 +332,8 @@ export default function Sidebar({
               label={ind.name}
               count={ind.count}
               newCount={ind.newCount}
-              active={isActive({ type: "indication", value: ind.name })}
-              onClick={() => onScopeChange({ type: "indication", value: ind.name })}
+              active={isActive({ domain: "trial", type: "indication", value: ind.name })}
+              onClick={() => onScopeChange({ domain: "trial", type: "indication", value: ind.name })}
               onRemove={ind.isDefault ? undefined : () => onRemoveIndication(ind.name)}
             />
           ))}
@@ -231,8 +388,8 @@ export default function Sidebar({
                 label={c.name}
                 count={c.count}
                 newCount={c.newCount}
-                active={isActive({ type: "compound", value: c.name })}
-                onClick={() => onScopeChange({ type: "compound", value: c.name })}
+                active={isActive({ domain: "trial", type: "compound", value: c.name })}
+                onClick={() => onScopeChange({ domain: "trial", type: "compound", value: c.name })}
                 onRemove={c.isDefault ? undefined : () => onRemoveCompound(c.name)}
               />
             ))}

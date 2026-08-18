@@ -87,3 +87,59 @@ model RefreshLog {
   newTrials     Int      @default(0)
   errorMessage  String?
 }
+
+// One row per tracked pharma company (the 24 seed companies, extensible
+// from the UI). Not every company is a public/SEC filer — Boehringer
+// Ingelheim is privately held (ticker and cik both null); Bayer, Merck
+// KGaA, Roche and UCB trade only as OTC ADRs abroad and don't file with
+// the SEC (ticker set for stock lookups, cik null so SEC ingestion is
+// skipped for them).
+model Company {
+  id               String   @id @default(cuid())
+  name             String   @unique
+  ticker           String? // stock ticker for the Yahoo quote lookup; null if not publicly traded
+  cik              String? // 10-digit zero-padded SEC CIK; null if not an SEC EDGAR filer
+  fdaSponsorNames  String[] @default([]) // name variant(s) openFDA's sponsor/manufacturer fields use
+  isDefault        Boolean  @default(false)
+  createdAt        DateTime @default(now())
+
+  updates CompanyUpdate[]
+
+  @@index([ticker])
+}
+
+// One row per discovered item for a tracked company: an SEC filing, an FDA
+// approval/label event, or a press-release proxy (derived from an 8-K's
+// Item 2.02/8.01). Unlike Trial, these are immutable published documents —
+// there's no "changed in place" concept, so each new item is simply a new
+// row, deduped by (companyId, kind, externalId) against the source's own
+// stable identifier (SEC accession number, FDA application/set id, etc.).
+model CompanyUpdate {
+  id          String   @id @default(cuid())
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  kind        String // "sec_filing" | "fda_approval" | "fda_label" | "press_release"
+  externalId  String // dedupe key from the source system
+  title       String
+  summary     String?
+  url         String?
+  sourceDate  DateTime // the filing/event's own date (e.g. SEC filingDate)
+  firstSeenAt DateTime @default(now()) // when this dashboard first recorded it
+  raw         Json? // full parsed snapshot, for the detail panel
+
+  @@unique([companyId, kind, externalId])
+  @@index([companyId])
+  @@index([sourceDate])
+  @@index([firstSeenAt])
+}
+
+// Bookkeeping for the company-ingestion cron / manual refresh button.
+model CompanyRefreshLog {
+  id               String    @id @default(cuid())
+  startedAt        DateTime  @default(now())
+  finishedAt       DateTime?
+  status           String    @default("running") // running | success | error
+  companiesScanned Int       @default(0)
+  updatesFound     Int       @default(0)
+  errorMessage     String?
+}

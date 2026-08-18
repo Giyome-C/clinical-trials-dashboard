@@ -1,6 +1,6 @@
 "use client";
 
-import type { Scope, TrialSummary } from "@/types";
+import type { TrialScope, TrialSummary } from "@/types";
 import StatusBadge from "./StatusBadge";
 
 function formatPhase(phases: string[]): string | null {
@@ -29,7 +29,7 @@ function formatTimestamp(iso: string | null): string | null {
   });
 }
 
-function scopeTitle(scope: Scope): string {
+function scopeTitle(scope: TrialScope): string {
   switch (scope.type) {
     case "all":
       return "All tracked trials";
@@ -55,7 +55,7 @@ export default function TrialList({
   search,
   onSearchChange,
 }: {
-  scope: Scope;
+  scope: TrialScope;
   trials: TrialSummary[];
   loading: boolean;
   selectedNctId: string | null;

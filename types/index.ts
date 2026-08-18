@@ -72,10 +72,68 @@ export interface RefreshLogDTO {
   errorMessage: string | null;
 }
 
-export type Scope =
-  | { type: "all" }
-  | { type: "changed" }
-  | { type: "today" }
-  | { type: "week" }
-  | { type: "indication"; value: string }
-  | { type: "compound"; value: string };
+// "domain" separates the two independently-tracked entities the sidebar
+// can show: clinical trials (matched against indications/compounds) and
+// companies (SEC/FDA/press-release updates). Each domain has its own set
+// of views; Dashboard renders TrialList/TrialDetail vs
+// CompanyList/CompanyDetail depending on which is active.
+export type TrialScope =
+  | { domain: "trial"; type: "all" }
+  | { domain: "trial"; type: "changed" }
+  | { domain: "trial"; type: "today" }
+  | { domain: "trial"; type: "week" }
+  | { domain: "trial"; type: "indication"; value: string }
+  | { domain: "trial"; type: "compound"; value: string };
+
+export type CompanyScope =
+  | { domain: "company"; type: "all" }
+  | { domain: "company"; type: "today" }
+  | { domain: "company"; type: "week" };
+
+export type Scope = TrialScope | CompanyScope;
+
+export interface CompanySummary {
+  id: string;
+  name: string;
+  ticker: string | null;
+  cik: string | null;
+  isDefault: boolean;
+  count: number;
+}
+
+// One row in the company center list — a single discovered SEC filing, FDA
+// approval/label event, or press-release proxy.
+export interface CompanyUpdateSummary {
+  id: string;
+  companyId: string;
+  companyName: string;
+  companyTicker: string | null;
+  kind: "sec_filing" | "press_release" | "fda_approval" | "fda_label";
+  title: string;
+  summary: string | null;
+  url: string | null;
+  sourceDate: string;
+  firstSeenAt: string;
+}
+
+export interface StockQuoteDTO {
+  ticker: string;
+  price: number | null;
+  currency: string | null;
+  fiftyTwoWeekAverage: number | null;
+  fiftyTwoWeekHigh: number | null;
+  fiftyTwoWeekLow: number | null;
+  asOf: string;
+}
+
+export type CompanyUpdateDetailDTO = CompanyUpdateSummary;
+
+export interface CompanyRefreshLogDTO {
+  id: string;
+  startedAt: string;
+  finishedAt: string | null;
+  status: string;
+  companiesScanned: number;
+  updatesFound: number;
+  errorMessage: string | null;
+}

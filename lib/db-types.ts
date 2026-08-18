@@ -31,6 +31,39 @@ export interface RefreshLogRow {
   errorMessage: string | null;
 }
 
+export interface CompanyRow {
+  id: string;
+  name: string;
+  ticker: string | null;
+  cik: string | null;
+  fdaSponsorNames: string[];
+  isDefault: boolean;
+  createdAt: Date;
+}
+
+export interface CompanyUpdateRow {
+  id: string;
+  companyId: string;
+  kind: string;
+  externalId: string;
+  title: string;
+  summary: string | null;
+  url: string | null;
+  sourceDate: Date;
+  firstSeenAt: Date;
+  raw: unknown;
+}
+
+export interface CompanyRefreshLogRow {
+  id: string;
+  startedAt: Date;
+  finishedAt: Date | null;
+  status: string;
+  companiesScanned: number;
+  updatesFound: number;
+  errorMessage: string | null;
+}
+
 export interface TrialRow {
   nctId: string;
   briefTitle: string;
