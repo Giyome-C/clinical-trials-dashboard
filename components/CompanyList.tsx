@@ -98,15 +98,17 @@ export default function CompanyList({
                   : "hover:bg-ink-muted/5 dark:hover:bg-ink-muted/10"
               }`}
             >
-              <span className="block text-[13px] font-medium leading-snug line-clamp-2">{u.title}</span>
-              <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-ink-secondary dark:text-ink-secondary-dark">
-                <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${meta.className}`}>
+              <div className="flex items-start justify-between gap-2">
+                <span className="text-[13px] font-medium">
+                  {u.companyName}
+                  {u.companyTicker && <span className="text-ink-muted"> ({u.companyTicker})</span>}
+                </span>
+                <span className={`shrink-0 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${meta.className}`}>
                   {meta.label}
                 </span>
-                <span className="font-medium">{u.companyName}</span>
-                {u.companyTicker && <span className="text-ink-muted">({u.companyTicker})</span>}
               </div>
-              {u.summary && (
+              <span className="mt-1 block text-[13px] leading-snug line-clamp-2">{u.title}</span>
+              {u.summary && u.summary !== u.title && !u.title.includes(u.summary) && (
                 <div className="mt-1 text-[11px] text-ink-secondary dark:text-ink-secondary-dark line-clamp-2">
                   {u.summary}
                 </div>
