@@ -9,6 +9,11 @@
 const EDGAR_CONTACT = process.env.SEC_EDGAR_CONTACT_EMAIL || "contact@example.com";
 const USER_AGENT = `Clinical Trials Dashboard (${EDGAR_CONTACT})`;
 
+// Exported so other SEC-facing fetches (e.g. lib/lead-text.ts, which pulls
+// the actual filing document for a press-release summary) send the same
+// compliant identification instead of an unset default fetch User-Agent.
+export const EDGAR_USER_AGENT = USER_AGENT;
+
 export interface EdgarFiling {
   accessionNumber: string;
   filingDate: string; // "YYYY-MM-DD"

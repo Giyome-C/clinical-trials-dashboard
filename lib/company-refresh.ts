@@ -1,7 +1,8 @@
 import { prisma } from "./db";
 import { ensureCompaniesSeeded } from "./seed";
-import { fetchRecentFilings, edgarFilingUrl, TRACKED_FORMS, PRESS_RELEASE_ITEMS } from "./edgar";
+import { fetchRecentFilings, edgarFilingUrl, TRACKED_FORMS, PRESS_RELEASE_ITEMS, EDGAR_USER_AGENT } from "./edgar";
 import { fetchDrugApprovals, fetchDrugLabelUpdates } from "./openfda";
+import { fetchLeadText } from "./lead-text";
 import type { CompanyRow } from "./db-types";
 
 // Runs company fetches with a small concurrency cap so a refresh covering
@@ -30,7 +31,11 @@ interface PendingUpdate {
   sourceDate: Date;
 }
 
-async function collectForCompany(company: CompanyRow, errors: string[]): Promise<PendingUpdate[]> {
+async function collectForCompany(
+  company: CompanyRow,
+  errors: string[],
+  knownPressReleaseKeys: Set<string>
+): Promise<PendingUpdate[]> {
   const pending: PendingUpdate[] = [];
 
   if (company.cik) {
@@ -42,6 +47,19 @@ async function collectForCompany(company: CompanyRow, errors: string[]): Promise
         const isPressRelease = f.form.startsWith("8-K") && items.some((it) => PRESS_RELEASE_ITEMS.has(it));
         const sourceDate = new Date(f.filingDate);
         if (Number.isNaN(sourceDate.getTime())) continue;
+        const url = edgarFilingUrl(company.cik, f.accessionNumber, f.primaryDocument);
+
+        // A press-release-flagged 8-K carries no real title/summary of its
+        // own from SEC's metadata — fetch the actual exhibit and pull its
+        // lead paragraph so the item isn't just a bare "item 2.02" label.
+        // Skipped for releases already on file: the fetch is the expensive
+        // part, and createMany's skipDuplicates would discard the row
+        // anyway, so there's no point paying for it twice.
+        let leadText: string | null = null;
+        if (isPressRelease && !knownPressReleaseKeys.has(`${company.id}:${f.accessionNumber}`)) {
+          leadText = await fetchLeadText(url, EDGAR_USER_AGENT);
+        }
+
         pending.push({
           companyId: company.id,
           kind: isPressRelease ? "press_release" : "sec_filing",
@@ -49,8 +67,8 @@ async function collectForCompany(company: CompanyRow, errors: string[]): Promise
           title: isPressRelease
             ? `Press release (via SEC 8-K, item ${items.join("/")})`
             : `SEC filing: ${f.form}${f.primaryDocDescription ? ` — ${f.primaryDocDescription}` : ""}`,
-          summary: f.primaryDocDescription ?? null,
-          url: edgarFilingUrl(company.cik, f.accessionNumber, f.primaryDocument),
+          summary: isPressRelease ? (leadText ?? f.primaryDocDescription ?? null) : f.primaryDocDescription ?? null,
+          url,
           sourceDate,
         });
       }
@@ -113,7 +131,20 @@ export async function runCompanyRefresh(): Promise<CompanyRefreshResult> {
   try {
     const companies: CompanyRow[] = await prisma.company.findMany();
 
-    const perCompany = await mapWithConcurrency(companies, 4, (c) => collectForCompany(c, errors));
+    // Existing press-release rows, keyed by "companyId:externalId" — used so
+    // collectForCompany only pays for a lead-text fetch on genuinely new
+    // press releases, not ones already on file from a prior refresh.
+    const existingPressReleases: { companyId: string; externalId: string }[] = await prisma.companyUpdate.findMany({
+      where: { kind: "press_release" },
+      select: { companyId: true, externalId: true },
+    });
+    const knownPressReleaseKeys: Set<string> = new Set(
+      existingPressReleases.map((r) => `${r.companyId}:${r.externalId}`)
+    );
+
+    const perCompany = await mapWithConcurrency(companies, 4, (c) =>
+      collectForCompany(c, errors, knownPressReleaseKeys)
+    );
     const allPending = perCompany.flat();
 
     let updatesFound = 0;
