@@ -127,6 +127,16 @@ export interface StockQuoteDTO {
   asOf: string;
 }
 
+// Canonical order for kind-filter UI (the filter modal's "Update type"
+// checklist) — kept alongside the CompanyUpdateSummary["kind"] union so both
+// stay in sync if a new kind is ever added.
+export const COMPANY_UPDATE_KINDS: CompanyUpdateSummary["kind"][] = [
+  "sec_filing",
+  "press_release",
+  "fda_approval",
+  "fda_label",
+];
+
 export type CompanyUpdateDetailDTO = CompanyUpdateSummary;
 
 export interface CompanyRefreshLogDTO {

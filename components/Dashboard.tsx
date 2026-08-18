@@ -21,6 +21,7 @@ import type {
   TrialScope,
   TrialSummary,
 } from "@/types";
+import { COMPANY_UPDATE_KINDS } from "@/types";
 
 async function jsonFetch<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
@@ -93,6 +94,7 @@ export default function Dashboard() {
   // --- Tracked Companies state -------------------------------------------
   const [companies, setCompanies] = useState<CompanySummary[]>([]);
   const [selectedCompanyNames, setSelectedCompanyNames] = useState<string[]>([]);
+  const [selectedKinds, setSelectedKinds] = useState<CompanyUpdateSummary["kind"][]>(COMPANY_UPDATE_KINDS);
   const companiesInitialized = useRef(false);
   const [lastCompanyRefresh, setLastCompanyRefresh] = useState<CompanyRefreshLogDTO | null>(null);
   const [totalUpdates, setTotalUpdates] = useState(0);
@@ -174,21 +176,25 @@ export default function Dashboard() {
     return data;
   }, []);
 
-  const loadCompanyUpdates = useCallback(async (s: CompanyScope, companyNames: string[], q: string) => {
-    setCompanyUpdatesLoading(true);
-    try {
-      const params = new URLSearchParams();
-      params.set("scope", s.type);
-      if (companyNames.length > 0) params.set("companies", companyNames.join(","));
-      if (s.type === "today") params.set("since", startOfToday().toISOString());
-      else if (s.type === "week") params.set("since", startOfRollingWeek().toISOString());
-      if (q) params.set("q", q);
-      const data = await jsonFetch<{ updates: RawCompanyUpdate[] }>(`/api/company-updates?${params.toString()}`);
-      setCompanyUpdates(data.updates.map(flattenUpdate));
-    } finally {
-      setCompanyUpdatesLoading(false);
-    }
-  }, []);
+  const loadCompanyUpdates = useCallback(
+    async (s: CompanyScope, companyNames: string[], kinds: CompanyUpdateSummary["kind"][], q: string) => {
+      setCompanyUpdatesLoading(true);
+      try {
+        const params = new URLSearchParams();
+        params.set("scope", s.type);
+        if (companyNames.length > 0) params.set("companies", companyNames.join(","));
+        if (kinds.length < COMPANY_UPDATE_KINDS.length) params.set("kinds", kinds.join(","));
+        if (s.type === "today") params.set("since", startOfToday().toISOString());
+        else if (s.type === "week") params.set("since", startOfRollingWeek().toISOString());
+        if (q) params.set("q", q);
+        const data = await jsonFetch<{ updates: RawCompanyUpdate[] }>(`/api/company-updates?${params.toString()}`);
+        setCompanyUpdates(data.updates.map(flattenUpdate));
+      } finally {
+        setCompanyUpdatesLoading(false);
+      }
+    },
+    []
+  );
 
   const handleRefreshCompanies = useCallback(async () => {
     setRefreshingCompanies(true);
@@ -198,10 +204,10 @@ export default function Dashboard() {
       // surfaced via lastCompanyRefresh.status after reload below
     } finally {
       await loadCompaniesMeta();
-      if (scope.domain === "company") await loadCompanyUpdates(scope, selectedCompanyNames, search);
+      if (scope.domain === "company") await loadCompanyUpdates(scope, selectedCompanyNames, selectedKinds, search);
       setRefreshingCompanies(false);
     }
-  }, [loadCompaniesMeta, loadCompanyUpdates, scope, selectedCompanyNames, search]);
+  }, [loadCompaniesMeta, loadCompanyUpdates, scope, selectedCompanyNames, selectedKinds, search]);
 
   // Initial load; auto-bootstrap with a first refresh if the DB is empty.
   useEffect(() => {
@@ -232,18 +238,19 @@ export default function Dashboard() {
     loadTrials(scope, search);
   }, [scope, search, loadTrials]);
 
-  // Reload the company list whenever its scope, search, or company filter
-  // changes. An explicit "zero companies selected" is treated as "show
-  // nothing" rather than "no filter" — the API's unfiltered default is only
-  // meant for before the roster has loaded.
+  // Reload the company list whenever its scope, search, company filter, or
+  // update-type filter changes. An explicit "zero companies selected" (or
+  // "zero types selected") is treated as "show nothing" rather than "no
+  // filter" — the API's unfiltered default is only meant for before the
+  // roster has loaded.
   useEffect(() => {
     if (scope.domain !== "company") return;
-    if (companies.length > 0 && selectedCompanyNames.length === 0) {
+    if ((companies.length > 0 && selectedCompanyNames.length === 0) || selectedKinds.length === 0) {
       setCompanyUpdates([]);
       return;
     }
-    loadCompanyUpdates(scope, selectedCompanyNames, search);
-  }, [scope, search, selectedCompanyNames, companies.length, loadCompanyUpdates]);
+    loadCompanyUpdates(scope, selectedCompanyNames, selectedKinds, search);
+  }, [scope, search, selectedCompanyNames, selectedKinds, companies.length, loadCompanyUpdates]);
 
   // Debounce search typing.
   const [rawSearch, setRawSearch] = useState("");
@@ -331,6 +338,12 @@ export default function Dashboard() {
   const handleSelectAllCompanies = () => setSelectedCompanyNames(companies.map((c) => c.name));
   const handleClearCompanies = () => setSelectedCompanyNames([]);
 
+  const handleToggleKind = (kind: CompanyUpdateSummary["kind"]) => {
+    setSelectedKinds((prev) => (prev.includes(kind) ? prev.filter((k) => k !== kind) : [...prev, kind]));
+  };
+  const handleSelectAllKinds = () => setSelectedKinds(COMPANY_UPDATE_KINDS);
+  const handleClearKinds = () => setSelectedKinds([]);
+
   const handleAddCompany = async (name: string, ticker: string | null) => {
     await jsonFetch("/api/companies", {
       method: "POST",
@@ -365,11 +378,6 @@ export default function Dashboard() {
         lastRefresh={lastRefresh}
         totalTrials={totalTrials}
         selectedCompanyNames={selectedCompanyNames}
-        onToggleCompany={handleToggleCompany}
-        onSelectAllCompanies={handleSelectAllCompanies}
-        onClearCompanies={handleClearCompanies}
-        onAddCompany={handleAddCompany}
-        onRemoveCompany={handleRemoveCompany}
         onRefreshCompanies={handleRefreshCompanies}
         refreshingCompanies={refreshingCompanies}
         lastCompanyRefresh={lastCompanyRefresh}
@@ -398,6 +406,17 @@ export default function Dashboard() {
             onSelect={setSelectedUpdateId}
             search={rawSearch}
             onSearchChange={setRawSearch}
+            companies={companies}
+            selectedCompanyNames={selectedCompanyNames}
+            onToggleCompany={handleToggleCompany}
+            onSelectAllCompanies={handleSelectAllCompanies}
+            onClearCompanies={handleClearCompanies}
+            onAddCompany={handleAddCompany}
+            onRemoveCompany={handleRemoveCompany}
+            selectedKinds={selectedKinds}
+            onToggleKind={handleToggleKind}
+            onSelectAllKinds={handleSelectAllKinds}
+            onClearKinds={handleClearKinds}
           />
           <CompanyDetail update={selectedUpdate} quote={selectedQuote} loading={companyDetailLoading} />
         </>

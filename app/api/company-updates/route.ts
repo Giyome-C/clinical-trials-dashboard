@@ -8,6 +8,7 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const scope = searchParams.get("scope") ?? "all";
   const companiesParam = searchParams.get("companies");
+  const kindsParam = searchParams.get("kinds");
   const q = searchParams.get("q")?.trim();
   const since = searchParams.get("since");
 
@@ -33,6 +34,16 @@ export async function GET(req: NextRequest) {
       // so an item stays in view for the whole day/week regardless of how
       // many refreshes run in between.
       andGroups.push({ firstSeenAt: { gte: sinceDate } });
+    }
+  }
+
+  if (kindsParam) {
+    const kinds = kindsParam
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (kinds.length > 0) {
+      andGroups.push({ kind: { in: kinds } });
     }
   }
 

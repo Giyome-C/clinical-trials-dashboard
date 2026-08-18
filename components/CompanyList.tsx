@@ -1,6 +1,9 @@
 "use client";
 
-import type { CompanyScope, CompanyUpdateSummary } from "@/types";
+import { useState } from "react";
+import type { CompanyScope, CompanySummary, CompanyUpdateSummary } from "@/types";
+import { COMPANY_UPDATE_KINDS } from "@/types";
+import CompanyFilterModal from "./CompanyFilterModal";
 
 const KIND_META: Record<CompanyUpdateSummary["kind"], { label: string; className: string }> = {
   sec_filing: {
@@ -59,6 +62,17 @@ export default function CompanyList({
   onSelect,
   search,
   onSearchChange,
+  companies,
+  selectedCompanyNames,
+  onToggleCompany,
+  onSelectAllCompanies,
+  onClearCompanies,
+  onAddCompany,
+  onRemoveCompany,
+  selectedKinds,
+  onToggleKind,
+  onSelectAllKinds,
+  onClearKinds,
 }: {
   scope: CompanyScope;
   updates: CompanyUpdateSummary[];
@@ -67,11 +81,36 @@ export default function CompanyList({
   onSelect: (id: string) => void;
   search: string;
   onSearchChange: (v: string) => void;
+  companies: CompanySummary[];
+  selectedCompanyNames: string[];
+  onToggleCompany: (name: string) => void;
+  onSelectAllCompanies: () => void;
+  onClearCompanies: () => void;
+  onAddCompany: (name: string, ticker: string | null) => void;
+  onRemoveCompany: (name: string) => void;
+  selectedKinds: CompanyUpdateSummary["kind"][];
+  onToggleKind: (kind: CompanyUpdateSummary["kind"]) => void;
+  onSelectAllKinds: () => void;
+  onClearKinds: () => void;
 }) {
+  const [filterOpen, setFilterOpen] = useState(false);
+  const filtersActive =
+    (companies.length > 0 && selectedCompanyNames.length < companies.length) ||
+    selectedKinds.length < COMPANY_UPDATE_KINDS.length;
+
   return (
     <section className="flex h-full w-[420px] shrink-0 flex-col border-r border-hairline dark:border-hairline-dark bg-surface-page dark:bg-surface-dark-page">
       <div className="px-4 py-3 border-b border-hairline dark:border-hairline-dark">
-        <h2 className="text-sm font-semibold truncate">{scopeTitle(scope)}</h2>
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold truncate">{scopeTitle(scope)}</h2>
+          <button
+            onClick={() => setFilterOpen(true)}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-hairline dark:border-hairline-dark px-2 py-1 text-[11px] font-medium text-ink-secondary hover:bg-ink-muted/10 dark:text-ink-secondary-dark"
+          >
+            Filter
+            {filtersActive && <span className="h-1.5 w-1.5 rounded-full bg-brand dark:bg-brand-dark" />}
+          </button>
+        </div>
         <input
           value={search}
           onChange={(e) => onSearchChange(e.target.value)}
@@ -79,6 +118,22 @@ export default function CompanyList({
           className="mt-2 w-full rounded-md border border-hairline dark:border-hairline-dark bg-surface dark:bg-surface-dark px-2.5 py-1.5 text-xs"
         />
       </div>
+      {filterOpen && (
+        <CompanyFilterModal
+          onClose={() => setFilterOpen(false)}
+          companies={companies}
+          selectedCompanyNames={selectedCompanyNames}
+          onToggleCompany={onToggleCompany}
+          onSelectAllCompanies={onSelectAllCompanies}
+          onClearCompanies={onClearCompanies}
+          onAddCompany={onAddCompany}
+          onRemoveCompany={onRemoveCompany}
+          selectedKinds={selectedKinds}
+          onToggleKind={onToggleKind}
+          onSelectAllKinds={onSelectAllKinds}
+          onClearKinds={onClearKinds}
+        />
+      )}
       <div className="flex-1 overflow-y-auto">
         {loading && <p className="px-4 py-6 text-xs text-ink-muted">Loading…</p>}
         {!loading && updates.length === 0 && (

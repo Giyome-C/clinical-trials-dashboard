@@ -81,11 +81,6 @@ export default function Sidebar({
   lastRefresh,
   totalTrials,
   selectedCompanyNames,
-  onToggleCompany,
-  onSelectAllCompanies,
-  onClearCompanies,
-  onAddCompany,
-  onRemoveCompany,
   onRefreshCompanies,
   refreshingCompanies,
   lastCompanyRefresh,
@@ -105,11 +100,6 @@ export default function Sidebar({
   lastRefresh: RefreshLogDTO | null;
   totalTrials: number;
   selectedCompanyNames: string[];
-  onToggleCompany: (name: string) => void;
-  onSelectAllCompanies: () => void;
-  onClearCompanies: () => void;
-  onAddCompany: (name: string, ticker: string | null) => void;
-  onRemoveCompany: (name: string) => void;
   onRefreshCompanies: () => void;
   refreshingCompanies: boolean;
   lastCompanyRefresh: CompanyRefreshLogDTO | null;
@@ -120,16 +110,12 @@ export default function Sidebar({
   const [addingCompound, setAddingCompound] = useState(false);
   const [newCompound, setNewCompound] = useState("");
   const [compoundQuery, setCompoundQuery] = useState("");
-  const [addingCompany, setAddingCompany] = useState(false);
-  const [newCompanyName, setNewCompanyName] = useState("");
-  const [newCompanyTicker, setNewCompanyTicker] = useState("");
 
   const filteredCompounds = compounds.filter((c) =>
     (c.name + " " + c.aliases.join(" ")).toLowerCase().includes(compoundQuery.toLowerCase())
   );
 
   const isActive = (s: Scope) => JSON.stringify(s) === JSON.stringify(scope);
-  const allCompaniesSelected = companies.length > 0 && selectedCompanyNames.length === companies.length;
 
   return (
     <aside className="flex h-full w-72 shrink-0 flex-col border-r border-hairline dark:border-hairline-dark bg-surface dark:bg-surface-dark">
@@ -154,44 +140,7 @@ export default function Sidebar({
         <div>
           <div className="px-1 mb-1 flex items-center justify-between">
             <span className="text-[11px] font-semibold uppercase tracking-wide text-ink-muted">Tracked Companies</span>
-            <button
-              className="text-[11px] text-brand dark:text-brand-dark hover:underline"
-              onClick={() => setAddingCompany((v) => !v)}
-            >
-              + Add
-            </button>
           </div>
-          {addingCompany && (
-            <form
-              className="px-1 mb-1.5 flex gap-1"
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (newCompanyName.trim()) {
-                  onAddCompany(newCompanyName.trim(), newCompanyTicker.trim() || null);
-                  setNewCompanyName("");
-                  setNewCompanyTicker("");
-                  setAddingCompany(false);
-                }
-              }}
-            >
-              <input
-                autoFocus
-                value={newCompanyName}
-                onChange={(e) => setNewCompanyName(e.target.value)}
-                placeholder="Company name"
-                className="flex-1 min-w-0 rounded border border-hairline dark:border-hairline-dark bg-transparent px-2 py-1 text-xs"
-              />
-              <input
-                value={newCompanyTicker}
-                onChange={(e) => setNewCompanyTicker(e.target.value)}
-                placeholder="Ticker"
-                className="w-16 min-w-0 rounded border border-hairline dark:border-hairline-dark bg-transparent px-2 py-1 text-xs"
-              />
-              <button type="submit" className="text-xs px-2 rounded bg-brand text-white">
-                Add
-              </button>
-            </form>
-          )}
 
           <NavRow
             label="All tracked companies"
@@ -224,46 +173,6 @@ export default function Sidebar({
           {lastCompanyRefresh?.status === "error" && (
             <p className="mb-1.5 px-1 text-[10px] text-status-critical">Last company refresh had errors — see server logs.</p>
           )}
-
-          <div className="mt-1 flex items-center justify-between px-1">
-            <span className="text-[10px] text-ink-muted">Filter by company</span>
-            <button
-              className="text-[10px] text-brand dark:text-brand-dark hover:underline"
-              onClick={allCompaniesSelected ? onClearCompanies : onSelectAllCompanies}
-            >
-              {allCompaniesSelected ? "Clear all" : "Select all"}
-            </button>
-          </div>
-          <div className="max-h-56 overflow-y-auto mt-1">
-            {companies.map((c) => (
-              <label
-                key={c.id}
-                className="group flex items-center gap-2 rounded-md px-1.5 py-1 text-[12px] text-ink-secondary dark:text-ink-secondary-dark cursor-pointer hover:bg-ink-muted/10"
-              >
-                <input
-                  type="checkbox"
-                  checked={selectedCompanyNames.includes(c.name)}
-                  onChange={() => onToggleCompany(c.name)}
-                  className="h-3.5 w-3.5 shrink-0 accent-brand"
-                />
-                <span className="flex-1 truncate">{c.name}</span>
-                <span className="text-[10px] text-ink-muted tabular-nums">{c.count}</span>
-                {!c.isDefault && (
-                  <button
-                    aria-label={`Remove ${c.name}`}
-                    className="opacity-0 group-hover:opacity-100 text-ink-muted hover:text-status-critical text-xs px-1"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      e.preventDefault();
-                      onRemoveCompany(c.name);
-                    }}
-                  >
-                    ✕
-                  </button>
-                )}
-              </label>
-            ))}
-          </div>
         </div>
 
         <div>
