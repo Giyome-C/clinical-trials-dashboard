@@ -85,18 +85,20 @@ const SKIP_PATH_PATTERN =
 const MIN_TITLE_LENGTH = 20;
 const MAX_TITLE_LENGTH = 320;
 
+// Deliberately does NOT swallow fetch failures into an empty array — an
+// earlier version did, and it meant a blocked/failed fetch and a "reached
+// the site but found nothing" were indistinguishable from the caller's
+// side, and neither ever showed up in CompanyRefreshLog.errorMessage. Let
+// this throw; lib/company-refresh.ts's catch records the real reason.
 export async function fetchPressReleaseList(sourceUrl: string, maxItems = 12): Promise<ScrapedPressRelease[]> {
-  let html: string;
-  try {
-    const res = await fetch(sourceUrl, {
-      headers: { "User-Agent": BROWSER_USER_AGENT, Accept: "text/html,application/xhtml+xml" },
-      cache: "no-store",
-    });
-    if (!res.ok) return [];
-    html = await res.text();
-  } catch {
-    return [];
+  const res = await fetch(sourceUrl, {
+    headers: { "User-Agent": BROWSER_USER_AGENT, Accept: "text/html,application/xhtml+xml" },
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    throw new Error(`fetch returned ${res.status} ${res.statusText} for ${sourceUrl}`);
   }
+  const html = await res.text();
 
   const $ = cheerio.load(html);
   const origin = new URL(sourceUrl).origin;

@@ -91,6 +91,14 @@ async function collectForCompany(
   if (pressSource) {
     try {
       const releases = await fetchPressReleaseList(pressSource.url);
+      // A source that's reachable but yields nothing is a distinct, useful
+      // signal from a fetch failure (caught below) — most likely the link
+      // heuristic in lib/press-releases.ts isn't matching this site's
+      // actual markup. Recorded so it shows up in CompanyRefreshLog rather
+      // than silently producing zero updates every refresh.
+      if (releases.length === 0) {
+        errors.push(`Press releases for "${company.name}": fetched OK but found 0 candidate items.`);
+      }
       for (const item of releases) {
         // Same "don't pay for the fetch twice" logic as the SEC-sourced
         // lead-text extraction above — externalId here is the press
