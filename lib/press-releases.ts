@@ -59,8 +59,12 @@ export const PRESS_RELEASE_SOURCES: Record<string, PressReleaseSource> = {
   Sanofi: { url: "https://www.sanofi.com/en/media-room/press-releases" },
   Merck: { url: "https://www.merck.com/media/news/" },
   Incyte: { url: "https://investor.incyte.com/press-releases" },
-  Lilly: { url: "https://investor.lilly.com/news-releases" },
-  Biogen: { url: "https://investors.biogen.com/news-releases" },
+  // investor.lilly.com/news-releases 404s (site restructured); the IR
+  // homepage itself carries the same recent-release links in static HTML.
+  Lilly: { url: "https://investor.lilly.com/" },
+  // investors.biogen.com/news-releases 404s; the real listing page moved
+  // under /news/news-releases.
+  Biogen: { url: "https://investors.biogen.com/news/news-releases" },
   Bayer: { url: "https://www.bayer.com/en/media" },
 };
 
