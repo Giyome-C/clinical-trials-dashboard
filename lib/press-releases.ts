@@ -24,9 +24,17 @@
 // this environment, and fragile even if it were), this uses a generic,
 // structure-agnostic heuristic: scan every link on the page, keep the ones
 // that look like article links (same-origin, a long hyphenated path — not
-// a nav/utility route — with substantial visible text), and read a date
-// out of nearby text if there is one. Expect some noise and some misses;
-// expect it to need retuning if a covered site redesigns its markup.
+// a nav/utility route — with substantial visible text). Expect some noise
+// and some misses; expect it to need retuning if a covered site redesigns
+// its markup.
+//
+// Deliberately does NOT try to read a publish date off this listing page:
+// an earlier version guessed a date from text near each link, and on at
+// least one real site that guess wasn't scoped to the right row — it read
+// the newest item's date and applied it to several older ones too. The
+// real date is read from each article's own page instead, in
+// lib/lead-text.ts's fetchArticleDetails (structured metadata scoped to
+// that one article, not a proximity guess).
 
 import * as cheerio from "cheerio";
 
@@ -59,7 +67,6 @@ export const PRESS_RELEASE_SOURCES: Record<string, PressReleaseSource> = {
 export interface ScrapedPressRelease {
   title: string;
   url: string;
-  sourceDate: Date | null;
 }
 
 // Path segments that are almost never a press-release article — filters
@@ -67,15 +74,16 @@ export interface ScrapedPressRelease {
 const SKIP_PATH_PATTERN =
   /\/(about|contact(-us)?|careers|jobs|privacy|cookies?|terms|legal|sitemap|login|search|subscribe|rss|accessibility|investors?|media-center|media|news|press-releases?|news-releases?)\/?$/i;
 
-const DATE_PATTERN =
-  /(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4}|\b\d{4}-\d{2}-\d{2}\b|\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/;
-
-function parseNearbyDate(text: string): Date | null {
-  const match = text.match(DATE_PATTERN);
-  if (!match) return null;
-  const d = new Date(match[0]);
-  return Number.isNaN(d.getTime()) ? null : d;
-}
+// Real pharma press-release headlines routinely run 200-300 characters
+// (e.g. "Merck and Moderna Announce Phase 3 INTerpath-001 Trial of
+// Intismeran Autogene Plus KEYTRUDA® Met Endpoints of Recurrence-Free
+// Survival (RFS) and Distant Metastasis-Free Survival (DMFS) in Patients
+// With Completely Resected Stage IIB-IV Melanoma" is 245) — a first
+// version of this cap sat at 220 and silently dropped headlines like that
+// one entirely. Kept high rather than removed so an accidental full
+// paragraph (concatenated multi-line link text) still gets excluded.
+const MIN_TITLE_LENGTH = 20;
+const MAX_TITLE_LENGTH = 320;
 
 export async function fetchPressReleaseList(sourceUrl: string, maxItems = 12): Promise<ScrapedPressRelease[]> {
   let html: string;
@@ -117,17 +125,13 @@ export async function fetchPressReleaseList(sourceUrl: string, maxItems = 12): P
     if (lastSegment.split("-").length < 4) return;
 
     const title = $(el).text().replace(/\s+/g, " ").trim();
-    if (title.length < 20 || title.length > 220) return;
+    if (title.length < MIN_TITLE_LENGTH || title.length > MAX_TITLE_LENGTH) return;
 
     const key = absolute.origin + absolute.pathname;
     if (seen.has(key)) return;
     seen.add(key);
 
-    // A date near the link — its own text, its parent's, or its closest
-    // list-row/article/div container's — covers the common "date, title"
-    // row layout. Falls back to null; the caller substitutes "now".
-    const nearbyText = [title, $(el).parent().text(), $(el).closest("li,article,div").text()].join(" ");
-    items.push({ title, url: absolute.toString(), sourceDate: parseNearbyDate(nearbyText) });
+    items.push({ title, url: absolute.toString() });
   });
 
   return items.slice(0, maxItems);

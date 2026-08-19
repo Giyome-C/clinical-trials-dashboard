@@ -41,7 +41,7 @@ function truncateAtWord(text: string, maxLen: number): string {
   return `${(lastSpace > 0 ? cut.slice(0, lastSpace) : cut).trim()}…`;
 }
 
-export async function fetchLeadText(url: string, userAgent: string): Promise<string | null> {
+async function fetchRawPage(url: string, userAgent: string): Promise<{ raw: string; looksLikeHtml: boolean } | null> {
   let raw: string;
   let contentType = "";
   try {
@@ -55,8 +55,11 @@ export async function fetchLeadText(url: string, userAgent: string): Promise<str
   } catch {
     return null;
   }
-
   const looksLikeHtml = contentType.includes("html") || /<html/i.test(raw.slice(0, 500));
+  return { raw, looksLikeHtml };
+}
+
+function extractLeadText(raw: string, looksLikeHtml: boolean): string | null {
   const text = looksLikeHtml ? stripHtml(raw) : raw;
 
   const paragraphs = text
@@ -71,4 +74,53 @@ export async function fetchLeadText(url: string, userAgent: string): Promise<str
   const lead = paragraphs.slice(startIdx >= 0 ? startIdx : 0, (startIdx >= 0 ? startIdx : 0) + 2).join(" ");
 
   return truncateAtWord(lead, LEAD_TEXT_MAX_CHARS);
+}
+
+// Looks for a structured publish date in the page's own markup — a
+// <meta property="article:published_time">, a JSON-LD "datePublished", or
+// a <time datetime="..."> — which is how almost every modern news/CMS page
+// marks up its date. This reads the date straight off the specific
+// article's own page, which is far more reliable than trying to guess a
+// date from text sitting near a link on a *listing* page: that approach
+// (an earlier version of the site-scraper) let the wrong row's date bleed
+// into a different article whenever the surrounding markup didn't nest
+// the way the guess assumed.
+function extractPublishedDate(raw: string): Date | null {
+  const patterns = [
+    /<meta[^>]+property=["']article:published_time["'][^>]+content=["']([^"']+)["']/i,
+    /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']article:published_time["']/i,
+    /<meta[^>]+name=["']date["'][^>]+content=["']([^"']+)["']/i,
+    /<meta[^>]+content=["']([^"']+)["'][^>]+name=["']date["']/i,
+    /"datePublished"\s*:\s*"([^"]+)"/i,
+    /<time[^>]+datetime=["']([^"']+)["']/i,
+  ];
+  for (const pattern of patterns) {
+    const match = raw.match(pattern);
+    if (match) {
+      const d = new Date(match[1]);
+      if (!Number.isNaN(d.getTime())) return d;
+    }
+  }
+  return null;
+}
+
+export async function fetchLeadText(url: string, userAgent: string): Promise<string | null> {
+  const page = await fetchRawPage(url, userAgent);
+  if (!page) return null;
+  return extractLeadText(page.raw, page.looksLikeHtml);
+}
+
+// Single fetch, both extractions — used for site-scraped press releases
+// (lib/press-releases.ts via lib/company-refresh.ts) so each article isn't
+// fetched twice just to get its summary and its date separately.
+export async function fetchArticleDetails(
+  url: string,
+  userAgent: string
+): Promise<{ leadText: string | null; publishedAt: Date | null }> {
+  const page = await fetchRawPage(url, userAgent);
+  if (!page) return { leadText: null, publishedAt: null };
+  return {
+    leadText: extractLeadText(page.raw, page.looksLikeHtml),
+    publishedAt: page.looksLikeHtml ? extractPublishedDate(page.raw) : null,
+  };
 }

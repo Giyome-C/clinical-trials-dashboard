@@ -2,7 +2,7 @@ import { prisma } from "./db";
 import { ensureCompaniesSeeded } from "./seed";
 import { fetchRecentFilings, edgarFilingUrl, TRACKED_FORMS, PRESS_RELEASE_ITEMS, EDGAR_USER_AGENT } from "./edgar";
 import { fetchDrugApprovals, fetchDrugLabelUpdates } from "./openfda";
-import { fetchLeadText } from "./lead-text";
+import { fetchLeadText, fetchArticleDetails } from "./lead-text";
 import { PRESS_RELEASE_SOURCES, PRESS_RELEASE_USER_AGENT, fetchPressReleaseList } from "./press-releases";
 import type { CompanyRow } from "./db-types";
 
@@ -96,9 +96,15 @@ async function collectForCompany(
         // lead-text extraction above — externalId here is the press
         // release's own URL rather than an accession number, but the
         // dedup key format (companyId:externalId) is identical either way.
+        // One fetch of the article's own page gets both its summary and
+        // its real publish date (read from the page's own metadata, not
+        // guessed from the listing page — see lib/press-releases.ts).
         let leadText: string | null = null;
+        let publishedAt: Date | null = null;
         if (!knownPressReleaseKeys.has(`${company.id}:${item.url}`)) {
-          leadText = await fetchLeadText(item.url, PRESS_RELEASE_USER_AGENT);
+          const details = await fetchArticleDetails(item.url, PRESS_RELEASE_USER_AGENT);
+          leadText = details.leadText;
+          publishedAt = details.publishedAt;
         }
         pending.push({
           companyId: company.id,
@@ -107,7 +113,7 @@ async function collectForCompany(
           title: item.title,
           summary: leadText,
           url: item.url,
-          sourceDate: item.sourceDate ?? new Date(),
+          sourceDate: publishedAt ?? new Date(),
         });
       }
     } catch (e) {
