@@ -3,6 +3,7 @@ import { ensureCompaniesSeeded } from "./seed";
 import { fetchRecentFilings, edgarFilingUrl, TRACKED_FORMS, PRESS_RELEASE_ITEMS, EDGAR_USER_AGENT } from "./edgar";
 import { fetchDrugApprovals, fetchDrugLabelUpdates } from "./openfda";
 import { fetchLeadText } from "./lead-text";
+import { PRESS_RELEASE_SOURCES, PRESS_RELEASE_USER_AGENT, fetchPressReleaseList } from "./press-releases";
 import type { CompanyRow } from "./db-types";
 
 // Runs company fetches with a small concurrency cap so a refresh covering
@@ -37,6 +38,12 @@ async function collectForCompany(
   knownPressReleaseKeys: Set<string>
 ): Promise<PendingUpdate[]> {
   const pending: PendingUpdate[] = [];
+  // When we have a real official-site source for this company (see
+  // lib/press-releases.ts), the SEC 8-K item 2.02/7.01/9.01 proxy below is
+  // redundant with the genuine press release fetched further down — so
+  // those filings are left as plain "sec_filing" entries instead of being
+  // dressed up as a fake press release.
+  const pressSource = PRESS_RELEASE_SOURCES[company.name];
 
   if (company.cik) {
     try {
@@ -44,7 +51,8 @@ async function collectForCompany(
       for (const f of filings) {
         if (!TRACKED_FORMS.has(f.form)) continue;
         const items = (f.items ?? "").split(",").map((s) => s.trim()).filter(Boolean);
-        const isPressRelease = f.form.startsWith("8-K") && items.some((it) => PRESS_RELEASE_ITEMS.has(it));
+        const isPressRelease =
+          !pressSource && f.form.startsWith("8-K") && items.some((it) => PRESS_RELEASE_ITEMS.has(it));
         const sourceDate = new Date(f.filingDate);
         if (Number.isNaN(sourceDate.getTime())) continue;
         const url = edgarFilingUrl(company.cik, f.accessionNumber, f.primaryDocument);
@@ -74,6 +82,36 @@ async function collectForCompany(
       }
     } catch (e) {
       errors.push(`SEC EDGAR for "${company.name}" failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
+  // Real press releases from the company's own newsroom, for the ~half of
+  // tracked companies whose site works with a plain fetch (see
+  // lib/press-releases.ts for exactly which, and why the rest don't).
+  if (pressSource) {
+    try {
+      const releases = await fetchPressReleaseList(pressSource.url);
+      for (const item of releases) {
+        // Same "don't pay for the fetch twice" logic as the SEC-sourced
+        // lead-text extraction above — externalId here is the press
+        // release's own URL rather than an accession number, but the
+        // dedup key format (companyId:externalId) is identical either way.
+        let leadText: string | null = null;
+        if (!knownPressReleaseKeys.has(`${company.id}:${item.url}`)) {
+          leadText = await fetchLeadText(item.url, PRESS_RELEASE_USER_AGENT);
+        }
+        pending.push({
+          companyId: company.id,
+          kind: "press_release",
+          externalId: item.url,
+          title: item.title,
+          summary: leadText,
+          url: item.url,
+          sourceDate: item.sourceDate ?? new Date(),
+        });
+      }
+    } catch (e) {
+      errors.push(`Press releases for "${company.name}" failed: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 
