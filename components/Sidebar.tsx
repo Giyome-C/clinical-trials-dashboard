@@ -18,6 +18,7 @@ function NavRow({
   label,
   count,
   newCount,
+  highlight,
   active,
   onClick,
   onRemove,
@@ -25,6 +26,10 @@ function NavRow({
   label: string;
   count?: number;
   newCount?: number;
+  // Renders `count` as a green pill instead of plain muted text — for a row
+  // like "New Today" where the number itself is the notable thing, not just
+  // reference info (unlike, say, "All tracked trials"'s count).
+  highlight?: boolean;
   active: boolean;
   onClick: () => void;
   onRemove?: () => void;
@@ -45,7 +50,12 @@ function NavRow({
             {newCount} new
           </span>
         )}
-        {typeof count === "number" && (
+        {typeof count === "number" && highlight && (
+          <span className="rounded-full bg-status-good text-white text-[10px] font-semibold px-1.5 py-0.5 tabular-nums">
+            {count}
+          </span>
+        )}
+        {typeof count === "number" && !highlight && (
           <span className="text-[11px] text-ink-muted tabular-nums">{count}</span>
         )}
         {onRemove && (
@@ -73,6 +83,8 @@ export default function Sidebar({
   refreshing,
   lastRefresh,
   totalTrials,
+  newTodayTrialsCount,
+  newWeekTrialsCount,
   selectedCompanyNames,
   lastCompanyRefresh,
   totalUpdates,
@@ -84,6 +96,8 @@ export default function Sidebar({
   refreshing: boolean;
   lastRefresh: RefreshLogDTO | null;
   totalTrials: number;
+  newTodayTrialsCount: number;
+  newWeekTrialsCount: number;
   selectedCompanyNames: string[];
   lastCompanyRefresh: CompanyRefreshLogDTO | null;
   totalUpdates: number;
@@ -147,21 +161,20 @@ export default function Sidebar({
           </div>
           <NavRow
             label="All tracked trials"
+            count={totalTrials}
             active={isActive({ domain: "trial", type: "all" })}
             onClick={() => onScopeChange({ domain: "trial", type: "all" })}
           />
           <NavRow
-            label="Updates since last refresh"
-            active={isActive({ domain: "trial", type: "changed" })}
-            onClick={() => onScopeChange({ domain: "trial", type: "changed" })}
-          />
-          <NavRow
             label="New Today"
+            count={newTodayTrialsCount}
+            highlight
             active={isActive({ domain: "trial", type: "today" })}
             onClick={() => onScopeChange({ domain: "trial", type: "today" })}
           />
           <NavRow
             label="New this Week"
+            count={newWeekTrialsCount}
             active={isActive({ domain: "trial", type: "week" })}
             onClick={() => onScopeChange({ domain: "trial", type: "week" })}
           />

@@ -78,6 +78,8 @@ export default function Dashboard() {
   const [compounds, setCompounds] = useState<CompoundDTO[]>([]);
   const [lastRefresh, setLastRefresh] = useState<RefreshLogDTO | null>(null);
   const [totalTrials, setTotalTrials] = useState(0);
+  const [newTodayTrialsCount, setNewTodayTrialsCount] = useState(0);
+  const [newWeekTrialsCount, setNewWeekTrialsCount] = useState(0);
 
   const [scope, setScope] = useState<Scope>({ domain: "trial", type: "all" });
   const [search, setSearch] = useState("");
@@ -118,16 +120,25 @@ export default function Dashboard() {
   const [companyDetailLoading, setCompanyDetailLoading] = useState(false);
 
   const loadMeta = useCallback(async () => {
+    // Same local-midnight boundaries loadTrials sends for scope=today|week,
+    // so the sidebar's counts always match what that nav row would show.
+    const params = new URLSearchParams();
+    params.set("todaySince", startOfToday().toISOString());
+    params.set("weekSince", startOfRollingWeek().toISOString());
     const data = await jsonFetch<{
       indications: IndicationDTO[];
       compounds: CompoundDTO[];
       lastRefresh: RefreshLogDTO | null;
       totalTrials: number;
-    }>("/api/meta");
+      newTodayCount: number;
+      newWeekCount: number;
+    }>(`/api/meta?${params.toString()}`);
     setIndications(data.indications);
     setCompounds(data.compounds);
     setLastRefresh(data.lastRefresh);
     setTotalTrials(data.totalTrials);
+    setNewTodayTrialsCount(data.newTodayCount);
+    setNewWeekTrialsCount(data.newWeekCount);
     // Default to "everything selected" the first time each roster loads, so
     // the trial views show everything out of the box; later reloads (after
     // add/remove) must not stomp on the user's own filter.
@@ -418,6 +429,8 @@ export default function Dashboard() {
         refreshing={refreshing || refreshingCompanies}
         lastRefresh={lastRefresh}
         totalTrials={totalTrials}
+        newTodayTrialsCount={newTodayTrialsCount}
+        newWeekTrialsCount={newWeekTrialsCount}
         selectedCompanyNames={selectedCompanyNames}
         lastCompanyRefresh={lastCompanyRefresh}
         totalUpdates={totalUpdates}
