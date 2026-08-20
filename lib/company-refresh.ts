@@ -90,7 +90,7 @@ async function collectForCompany(
   // lib/press-releases.ts for exactly which, and why the rest don't).
   if (pressSource) {
     try {
-      const releases = await fetchPressReleaseList(pressSource.url);
+      const releases = await fetchPressReleaseList(pressSource);
       // A source that's reachable but yields nothing is a distinct, useful
       // signal from a fetch failure (caught below) — most likely the link
       // heuristic in lib/press-releases.ts isn't matching this site's
@@ -110,7 +110,11 @@ async function collectForCompany(
         let leadText: string | null = null;
         let publishedAt: Date | null = null;
         if (!knownPressReleaseKeys.has(`${company.id}:${item.url}`)) {
-          const details = await fetchArticleDetails(item.url, PRESS_RELEASE_USER_AGENT);
+          const details = await fetchArticleDetails(
+            item.url,
+            PRESS_RELEASE_USER_AGENT,
+            pressSource.renderMode === "browser"
+          );
           leadText = details.leadText;
           publishedAt = details.publishedAt;
         }

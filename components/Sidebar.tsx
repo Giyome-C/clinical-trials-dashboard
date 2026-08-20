@@ -74,8 +74,6 @@ export default function Sidebar({
   lastRefresh,
   totalTrials,
   selectedCompanyNames,
-  onRefreshCompanies,
-  refreshingCompanies,
   lastCompanyRefresh,
   totalUpdates,
 }: {
@@ -87,8 +85,6 @@ export default function Sidebar({
   lastRefresh: RefreshLogDTO | null;
   totalTrials: number;
   selectedCompanyNames: string[];
-  onRefreshCompanies: () => void;
-  refreshingCompanies: boolean;
   lastCompanyRefresh: CompanyRefreshLogDTO | null;
   totalUpdates: number;
 }) {
@@ -136,17 +132,10 @@ export default function Sidebar({
             onClick={() => onScopeChange({ domain: "company", type: "week" })}
           />
 
-          <p className="mt-2 px-1 text-[10px] text-ink-muted">
+          <p className="mt-2 mb-1.5 px-1 text-[10px] text-ink-muted">
             {selectedCompanyNames.length} of {companies.length} selected · refreshed{" "}
             {timeAgo(lastCompanyRefresh?.finishedAt ?? lastCompanyRefresh?.startedAt)}
           </p>
-          <button
-            onClick={onRefreshCompanies}
-            disabled={refreshingCompanies}
-            className="mt-1.5 mb-1.5 w-full rounded-md border border-hairline dark:border-hairline-dark bg-transparent text-ink-secondary dark:text-ink-secondary-dark text-[11px] font-medium py-1 hover:bg-ink-muted/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            {refreshingCompanies ? "Refreshing…" : "Refresh companies"}
-          </button>
           {lastCompanyRefresh?.status === "error" && (
             <p className="mb-1.5 px-1 text-[10px] text-status-critical">Last company refresh had errors — see server logs.</p>
           )}

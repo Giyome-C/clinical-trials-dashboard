@@ -9,6 +9,8 @@
 // can't guarantee it always lands on the most meaningful paragraph — it's
 // "good enough excerpt," not a guaranteed abstract.
 
+import { fetchRenderedHtml } from "./browserless";
+
 const MAX_FETCH_CHARS = 500_000; // cap how much of a document we read
 const LEAD_TEXT_MAX_CHARS = 700;
 
@@ -41,18 +43,33 @@ function truncateAtWord(text: string, maxLen: number): string {
   return `${(lastSpace > 0 ? cut.slice(0, lastSpace) : cut).trim()}…`;
 }
 
-async function fetchRawPage(url: string, userAgent: string): Promise<{ raw: string; looksLikeHtml: boolean } | null> {
+async function fetchRawPage(
+  url: string,
+  userAgent: string,
+  useBrowserRender = false
+): Promise<{ raw: string; looksLikeHtml: boolean } | null> {
   let raw: string;
   let contentType = "";
   try {
-    const res = await fetch(url, {
-      headers: { "User-Agent": userAgent, Accept: "text/html,application/xhtml+xml,text/plain" },
-      cache: "no-store",
-    });
-    if (!res.ok) return null;
-    contentType = res.headers.get("content-type") ?? "";
-    raw = (await res.text()).slice(0, MAX_FETCH_CHARS);
+    if (useBrowserRender) {
+      // Same reasoning as the listing-page fetch in lib/press-releases.ts:
+      // a source flagged renderMode:"browser" needs a real browser to get
+      // real content, on its article pages too, not just its listing page.
+      raw = (await fetchRenderedHtml(url)).slice(0, MAX_FETCH_CHARS);
+      contentType = "text/html";
+    } else {
+      const res = await fetch(url, {
+        headers: { "User-Agent": userAgent, Accept: "text/html,application/xhtml+xml,text/plain" },
+        cache: "no-store",
+      });
+      if (!res.ok) return null;
+      contentType = res.headers.get("content-type") ?? "";
+      raw = (await res.text()).slice(0, MAX_FETCH_CHARS);
+    }
   } catch {
+    // Unlike the listing-page fetch, a single article's detail page failing
+    // isn't worth surfacing as a refresh error — the item still gets
+    // ingested from the listing page, just without a summary/real date.
     return null;
   }
   const looksLikeHtml = contentType.includes("html") || /<html/i.test(raw.slice(0, 500));
@@ -115,9 +132,10 @@ export async function fetchLeadText(url: string, userAgent: string): Promise<str
 // fetched twice just to get its summary and its date separately.
 export async function fetchArticleDetails(
   url: string,
-  userAgent: string
+  userAgent: string,
+  useBrowserRender = false
 ): Promise<{ leadText: string | null; publishedAt: Date | null }> {
-  const page = await fetchRawPage(url, userAgent);
+  const page = await fetchRawPage(url, userAgent, useBrowserRender);
   if (!page) return { leadText: null, publishedAt: null };
   return {
     leadText: extractLeadText(page.raw, page.looksLikeHtml),

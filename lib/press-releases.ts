@@ -37,6 +37,7 @@
 // that one article, not a proximity guess).
 
 import * as cheerio from "cheerio";
+import { fetchRenderedHtml } from "./browserless";
 
 const BROWSER_USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
@@ -47,6 +48,13 @@ export const PRESS_RELEASE_USER_AGENT = BROWSER_USER_AGENT;
 
 export interface PressReleaseSource {
   url: string;
+  // "browser" fetches this source through lib/browserless.ts (a real
+  // headless-Chrome render) instead of a plain server-side fetch. Only set
+  // this for sources that actually need it — it costs Browserless "units"
+  // and requires BROWSERLESS_API_KEY to be configured. Omitted/"static"
+  // means the default plain fetch, which is free and works for most of
+  // these sources.
+  renderMode?: "static" | "browser";
 }
 
 // Keyed by the exact Company.name values in lib/companies.ts.
@@ -62,9 +70,12 @@ export const PRESS_RELEASE_SOURCES: Record<string, PressReleaseSource> = {
   // investor.lilly.com/news-releases 404s (site restructured); the IR
   // homepage itself carries the same recent-release links in static HTML.
   Lilly: { url: "https://investor.lilly.com/" },
-  // investors.biogen.com/news-releases 404s; the real listing page moved
-  // under /news/news-releases.
-  Biogen: { url: "https://investors.biogen.com/news/news-releases" },
+  // investors.biogen.com/news/news-releases returns 200 with real article
+  // links when fetched from Anthropic's own infrastructure (verified by
+  // hand), but a plain fetch from Vercel's serverless function gets back a
+  // 200 with zero matching links — a classic bot-detection cloak, not a
+  // JS-rendering issue. A real headless-browser render gets past it.
+  Biogen: { url: "https://investors.biogen.com/news/news-releases", renderMode: "browser" },
   Bayer: { url: "https://www.bayer.com/en/media" },
 };
 
@@ -94,15 +105,24 @@ const MAX_TITLE_LENGTH = 320;
 // the site but found nothing" were indistinguishable from the caller's
 // side, and neither ever showed up in CompanyRefreshLog.errorMessage. Let
 // this throw; lib/company-refresh.ts's catch records the real reason.
-export async function fetchPressReleaseList(sourceUrl: string, maxItems = 12): Promise<ScrapedPressRelease[]> {
-  const res = await fetch(sourceUrl, {
-    headers: { "User-Agent": BROWSER_USER_AGENT, Accept: "text/html,application/xhtml+xml" },
-    cache: "no-store",
-  });
-  if (!res.ok) {
-    throw new Error(`fetch returned ${res.status} ${res.statusText} for ${sourceUrl}`);
-  }
-  const html = await res.text();
+export async function fetchPressReleaseList(
+  source: PressReleaseSource,
+  maxItems = 12
+): Promise<ScrapedPressRelease[]> {
+  const sourceUrl = source.url;
+  const html =
+    source.renderMode === "browser"
+      ? await fetchRenderedHtml(sourceUrl)
+      : await (async () => {
+          const res = await fetch(sourceUrl, {
+            headers: { "User-Agent": BROWSER_USER_AGENT, Accept: "text/html,application/xhtml+xml" },
+            cache: "no-store",
+          });
+          if (!res.ok) {
+            throw new Error(`fetch returned ${res.status} ${res.statusText} for ${sourceUrl}`);
+          }
+          return res.text();
+        })();
 
   const $ = cheerio.load(html);
   const origin = new URL(sourceUrl).origin;

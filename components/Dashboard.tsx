@@ -230,11 +230,23 @@ export default function Dashboard() {
     }
   }, [loadCompaniesMeta, loadCompanyUpdates, scope, selectedCompanyNames, selectedKinds, search]);
 
-  // Initial load; auto-bootstrap with a first refresh if the DB is empty.
+  // Single "Refresh now" button in the sidebar drives both refreshes at
+  // once — trials and tracked-company updates are independent backend jobs
+  // (separate API routes, separate refresh logs), so they run concurrently
+  // rather than one waiting on the other.
+  const handleRefreshAll = useCallback(async () => {
+    await Promise.all([handleRefresh(), handleRefreshCompanies()]);
+  }, [handleRefresh, handleRefreshCompanies]);
+
+  // Initial load: show whatever's already in the DB immediately (fast), then
+  // always kick off a real refresh in the background — every page load/
+  // reload pulls fresh data, not just the first time the DB is empty. The
+  // bootstrapped ref only guards against React StrictMode's double-invoke
+  // of effects in dev; it's not a "was there data already" check anymore.
   useEffect(() => {
     (async () => {
-      const meta = await loadMeta();
-      if (!bootstrapped.current && meta.totalTrials === 0) {
+      await loadMeta();
+      if (!bootstrapped.current) {
         bootstrapped.current = true;
         await handleRefresh();
       }
@@ -244,8 +256,8 @@ export default function Dashboard() {
 
   useEffect(() => {
     (async () => {
-      const meta = await loadCompaniesMeta();
-      if (!companyBootstrapped.current && meta.totalUpdates === 0) {
+      await loadCompaniesMeta();
+      if (!companyBootstrapped.current) {
         companyBootstrapped.current = true;
         await handleRefreshCompanies();
       }
@@ -402,13 +414,11 @@ export default function Dashboard() {
         companies={companies}
         scope={scope}
         onScopeChange={handleScopeChange}
-        onRefresh={handleRefresh}
-        refreshing={refreshing}
+        onRefresh={handleRefreshAll}
+        refreshing={refreshing || refreshingCompanies}
         lastRefresh={lastRefresh}
         totalTrials={totalTrials}
         selectedCompanyNames={selectedCompanyNames}
-        onRefreshCompanies={handleRefreshCompanies}
-        refreshingCompanies={refreshingCompanies}
         lastCompanyRefresh={lastCompanyRefresh}
         totalUpdates={totalUpdates}
       />
