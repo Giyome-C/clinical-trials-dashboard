@@ -109,6 +109,8 @@ export default function Dashboard() {
   const companiesInitialized = useRef(false);
   const [lastCompanyRefresh, setLastCompanyRefresh] = useState<CompanyRefreshLogDTO | null>(null);
   const [totalUpdates, setTotalUpdates] = useState(0);
+  const [newTodayUpdatesCount, setNewTodayUpdatesCount] = useState(0);
+  const [newWeekUpdatesCount, setNewWeekUpdatesCount] = useState(0);
   const [refreshingCompanies, setRefreshingCompanies] = useState(false);
   const companyBootstrapped = useRef(false);
 
@@ -190,14 +192,24 @@ export default function Dashboard() {
   // --- Tracked Companies data loading -------------------------------------
 
   const loadCompaniesMeta = useCallback(async () => {
+    // Same local-midnight boundaries loadCompanyUpdates sends for
+    // scope=today|week, so these counts always match what that nav row
+    // would show.
+    const params = new URLSearchParams();
+    params.set("todaySince", startOfToday().toISOString());
+    params.set("weekSince", startOfRollingWeek().toISOString());
     const data = await jsonFetch<{
       companies: (CompanySummary & { fdaSponsorNames: string[]; createdAt: string })[];
       lastRefresh: CompanyRefreshLogDTO | null;
       totalUpdates: number;
-    }>("/api/companies");
+      newTodayCount: number;
+      newWeekCount: number;
+    }>(`/api/companies?${params.toString()}`);
     setCompanies(data.companies);
     setLastCompanyRefresh(data.lastRefresh);
     setTotalUpdates(data.totalUpdates);
+    setNewTodayUpdatesCount(data.newTodayCount);
+    setNewWeekUpdatesCount(data.newWeekCount);
     // Default to "everything selected" the first time the roster loads, so
     // the three company views show all companies out of the box; later
     // reloads (after add/remove) must not stomp on the user's own filter.
@@ -434,6 +446,8 @@ export default function Dashboard() {
         selectedCompanyNames={selectedCompanyNames}
         lastCompanyRefresh={lastCompanyRefresh}
         totalUpdates={totalUpdates}
+        newTodayUpdatesCount={newTodayUpdatesCount}
+        newWeekUpdatesCount={newWeekUpdatesCount}
       />
       {scope.domain === "trial" ? (
         <>

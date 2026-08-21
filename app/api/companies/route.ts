@@ -7,15 +7,37 @@ export const dynamic = "force-dynamic";
 
 // Sidebar company checkboxes + counts, fetched once on load and after every
 // company refresh.
-export async function GET() {
+//
+// todaySince/weekSince are the client's own local-midnight boundaries (same
+// values it sends to /api/company-updates?scope=today|week — see
+// Dashboard.tsx's startOfToday/startOfRollingWeek) so newTodayCount/
+// newWeekCount always match what you'd see if you clicked into that nav row.
+export async function GET(req: NextRequest) {
   await ensureCompaniesSeeded();
 
-  const [companies, lastRefresh, totalUpdates]: [CompanyRow[], CompanyRefreshLogRow | null, number] =
-    await Promise.all([
-      prisma.company.findMany({ orderBy: { name: "asc" } }),
-      prisma.companyRefreshLog.findFirst({ orderBy: { startedAt: "desc" } }),
-      prisma.companyUpdate.count(),
-    ]);
+  const { searchParams } = new URL(req.url);
+  const todaySince = searchParams.get("todaySince");
+  const weekSince = searchParams.get("weekSince");
+  const todaySinceDate = todaySince ? new Date(todaySince) : null;
+  const weekSinceDate = weekSince ? new Date(weekSince) : null;
+
+  const [companies, lastRefresh, totalUpdates, newTodayCount, newWeekCount]: [
+    CompanyRow[],
+    CompanyRefreshLogRow | null,
+    number,
+    number,
+    number,
+  ] = await Promise.all([
+    prisma.company.findMany({ orderBy: { name: "asc" } }),
+    prisma.companyRefreshLog.findFirst({ orderBy: { startedAt: "desc" } }),
+    prisma.companyUpdate.count(),
+    todaySinceDate && !Number.isNaN(todaySinceDate.getTime())
+      ? prisma.companyUpdate.count({ where: { firstSeenAt: { gte: todaySinceDate } } })
+      : Promise.resolve(0),
+    weekSinceDate && !Number.isNaN(weekSinceDate.getTime())
+      ? prisma.companyUpdate.count({ where: { firstSeenAt: { gte: weekSinceDate } } })
+      : Promise.resolve(0),
+  ]);
 
   const withCounts = await Promise.all(
     companies.map(async (c) => ({
@@ -24,7 +46,7 @@ export async function GET() {
     }))
   );
 
-  return NextResponse.json({ companies: withCounts, lastRefresh, totalUpdates });
+  return NextResponse.json({ companies: withCounts, lastRefresh, totalUpdates, newTodayCount, newWeekCount });
 }
 
 export async function POST(req: NextRequest) {

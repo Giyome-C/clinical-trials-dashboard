@@ -88,6 +88,8 @@ export default function Sidebar({
   selectedCompanyNames,
   lastCompanyRefresh,
   totalUpdates,
+  newTodayUpdatesCount,
+  newWeekUpdatesCount,
 }: {
   companies: CompanySummary[];
   scope: Scope;
@@ -101,6 +103,8 @@ export default function Sidebar({
   selectedCompanyNames: string[];
   lastCompanyRefresh: CompanyRefreshLogDTO | null;
   totalUpdates: number;
+  newTodayUpdatesCount: number;
+  newWeekUpdatesCount: number;
 }) {
   const isActive = (s: Scope) => JSON.stringify(s) === JSON.stringify(scope);
 
@@ -137,11 +141,14 @@ export default function Sidebar({
           />
           <NavRow
             label="New Today"
+            count={newTodayUpdatesCount}
+            highlight
             active={isActive({ domain: "company", type: "today" })}
             onClick={() => onScopeChange({ domain: "company", type: "today" })}
           />
           <NavRow
             label="New this Week"
+            count={newWeekUpdatesCount}
             active={isActive({ domain: "company", type: "week" })}
             onClick={() => onScopeChange({ domain: "company", type: "week" })}
           />
